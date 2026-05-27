@@ -102,6 +102,10 @@ const String App1 = "BLYNK";         // empty string if not applicable -> "" els
 
 /****** Additional Settings (Compile-Zeit-Fallbacks) ************************/
 
+// Kalibrierungsfaktor für den Spannungsteiler am ADC (R1=540kΩ, R2=100kΩ).
+// Anpassen bis der angezeigte Wert mit dem Multimeter übereinstimmt.
+#define BATTERY_CALIB_FACTOR  5.2f
+
 #define CFG_DEFAULT_TEMP_CORR     0.0f   // Manuelle Temperaturkorrektur in °C
 #define CFG_DEFAULT_ELEVATION     420    // Höhe über NN in Metern
 #define CFG_DEFAULT_SLEEP_MIN     10     // Deep-Sleep-Dauer in Minuten

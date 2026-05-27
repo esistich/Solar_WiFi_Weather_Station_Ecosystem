@@ -187,51 +187,8 @@ static const uint8_t EEPROM_MAGIC[4] = { 0x53, 0x57, 0x53, 0x32 };  // "SWS2"
 static const int     EEPROM_SIZE     = 2048;
 static const int     EEPROM_DATA_OFFSET = 4;
 
-void loadConfig() {
-  EEPROM.begin(EEPROM_SIZE);
-
-  // Magic-Bytes prüfen
-  bool valid = true;
-  for (int i = 0; i < 4; i++) {
-    if (EEPROM.read(i) != EEPROM_MAGIC[i]) { valid = false; break; }
-  }
-
-  if (valid) {
-    // JSON aus EEPROM lesen
-    char buf[EEPROM_SIZE - EEPROM_DATA_OFFSET];
-    for (int i = 0; i < (int)sizeof(buf); i++) {
-      buf[i] = (char)EEPROM.read(EEPROM_DATA_OFFSET + i);
-    }
-    JsonDocument doc;
-    if (deserializeJson(doc, buf) == DeserializationError::Ok) {
-      strlcpy(cfg.station_name,      doc["station_name"]      | CFG_DEFAULT_STATION_NAME, sizeof(cfg.station_name));
-      strlcpy(cfg.wifi_ssid,         doc["wifi_ssid"]         | CFG_DEFAULT_WIFI_SSID,    sizeof(cfg.wifi_ssid));
-      strlcpy(cfg.wifi_pass,         doc["wifi_pass"]         | CFG_DEFAULT_WIFI_PASS,    sizeof(cfg.wifi_pass));
-      cfg.mqtt_enabled = doc["mqtt_enabled"] | CFG_DEFAULT_MQTT_ENABLED;
-      strlcpy(cfg.mqtt_server,       doc["mqtt_server"]       | CFG_DEFAULT_MQTT_SERVER,       sizeof(cfg.mqtt_server));
-      cfg.mqtt_port    = doc["mqtt_port"]    | CFG_DEFAULT_MQTT_PORT;
-      strlcpy(cfg.mqtt_user,         doc["mqtt_user"]         | CFG_DEFAULT_MQTT_USER,         sizeof(cfg.mqtt_user));
-      strlcpy(cfg.mqtt_pass,         doc["mqtt_pass"]         | CFG_DEFAULT_MQTT_PASS,         sizeof(cfg.mqtt_pass));
-      strlcpy(cfg.mqtt_topic,        doc["mqtt_topic"]        | CFG_DEFAULT_MQTT_TOPIC,        sizeof(cfg.mqtt_topic));
-      strlcpy(cfg.mqtt_press_topic,  doc["mqtt_press_topic"]  | CFG_DEFAULT_MQTT_PRESS_TOPIC,  sizeof(cfg.mqtt_press_topic));
-      strlcpy(cfg.mqtt_status,       doc["mqtt_status"]       | CFG_DEFAULT_MQTT_STATUS,       sizeof(cfg.mqtt_status));
-      cfg.api_enabled  = doc["api_enabled"]  | CFG_DEFAULT_API_ENABLED;
-      cfg.api_https    = doc["api_https"]    | CFG_DEFAULT_API_HTTPS;
-      strlcpy(cfg.api_host,          doc["api_host"]          | CFG_DEFAULT_API_HOST,          sizeof(cfg.api_host));
-      strlcpy(cfg.api_path,          doc["api_path"]          | CFG_DEFAULT_API_PATH,          sizeof(cfg.api_path));
-      cfg.api_port     = doc["api_port"]     | CFG_DEFAULT_API_PORT;
-      strlcpy(cfg.api_user,          doc["api_user"]          | CFG_DEFAULT_API_USER,          sizeof(cfg.api_user));
-      strlcpy(cfg.api_pass,          doc["api_pass"]          | CFG_DEFAULT_API_PASS,          sizeof(cfg.api_pass));
-      cfg.temp_corr    = doc["temp_corr"]    | CFG_DEFAULT_TEMP_CORR;
-      cfg.elevation    = doc["elevation"]    | CFG_DEFAULT_ELEVATION;
-      cfg.sleep_min    = doc["sleep_min"]    | CFG_DEFAULT_SLEEP_MIN;
-      Serial.println("Konfiguration aus EEPROM geladen.");
-      return;
-    }
-  }
-
-  // Kein gültiges EEPROM → Compile-Zeit-Defaults verwenden
-  Serial.println("EEPROM leer/ungültig – verwende Compile-Zeit-Defaults.");
+// Compile-Zeit-Defaults in cfg schreiben (immer als Ausgangsbasis)
+static void applyDefaults() {
   strlcpy(cfg.station_name,     CFG_DEFAULT_STATION_NAME,     sizeof(cfg.station_name));
   strlcpy(cfg.wifi_ssid,        CFG_DEFAULT_WIFI_SSID,        sizeof(cfg.wifi_ssid));
   strlcpy(cfg.wifi_pass,        CFG_DEFAULT_WIFI_PASS,        sizeof(cfg.wifi_pass));
@@ -253,6 +210,59 @@ void loadConfig() {
   cfg.temp_corr    = CFG_DEFAULT_TEMP_CORR;
   cfg.elevation    = CFG_DEFAULT_ELEVATION;
   cfg.sleep_min    = CFG_DEFAULT_SLEEP_MIN;
+}
+
+void loadConfig() {
+  // Erst Defaults setzen, dann ggf. mit EEPROM-Werten überschreiben
+  applyDefaults();
+
+  EEPROM.begin(EEPROM_SIZE);
+
+  // Magic-Bytes prüfen
+  bool valid = true;
+  for (int i = 0; i < 4; i++) {
+    if (EEPROM.read(i) != EEPROM_MAGIC[i]) { valid = false; break; }
+  }
+  if (!valid) {
+    Serial.println("EEPROM leer/ungültig – verwende Compile-Zeit-Defaults.");
+    return;
+  }
+
+  // JSON aus EEPROM lesen
+  char buf[EEPROM_SIZE - EEPROM_DATA_OFFSET];
+  for (int i = 0; i < (int)sizeof(buf); i++) {
+    buf[i] = (char)EEPROM.read(EEPROM_DATA_OFFSET + i);
+  }
+  JsonDocument doc;
+  if (deserializeJson(doc, buf) != DeserializationError::Ok) {
+    Serial.println("EEPROM-JSON ungültig – verwende Compile-Zeit-Defaults.");
+    return;
+  }
+
+  // Nur vorhandene EEPROM-Felder überschreiben; fehlende behalten den Default
+  if (doc["station_name"].is<const char*>())     strlcpy(cfg.station_name,     doc["station_name"],     sizeof(cfg.station_name));
+  if (doc["wifi_ssid"].is<const char*>())        strlcpy(cfg.wifi_ssid,        doc["wifi_ssid"],        sizeof(cfg.wifi_ssid));
+  if (doc["wifi_pass"].is<const char*>())        strlcpy(cfg.wifi_pass,        doc["wifi_pass"],        sizeof(cfg.wifi_pass));
+  if (!doc["mqtt_enabled"].isNull())             cfg.mqtt_enabled = doc["mqtt_enabled"];
+  if (doc["mqtt_server"].is<const char*>())      strlcpy(cfg.mqtt_server,      doc["mqtt_server"],      sizeof(cfg.mqtt_server));
+  if (!doc["mqtt_port"].isNull())                cfg.mqtt_port    = doc["mqtt_port"];
+  if (doc["mqtt_user"].is<const char*>())        strlcpy(cfg.mqtt_user,        doc["mqtt_user"],        sizeof(cfg.mqtt_user));
+  if (doc["mqtt_pass"].is<const char*>())        strlcpy(cfg.mqtt_pass,        doc["mqtt_pass"],        sizeof(cfg.mqtt_pass));
+  if (doc["mqtt_topic"].is<const char*>())       strlcpy(cfg.mqtt_topic,       doc["mqtt_topic"],       sizeof(cfg.mqtt_topic));
+  if (doc["mqtt_press_topic"].is<const char*>()) strlcpy(cfg.mqtt_press_topic, doc["mqtt_press_topic"], sizeof(cfg.mqtt_press_topic));
+  if (doc["mqtt_status"].is<const char*>())      strlcpy(cfg.mqtt_status,      doc["mqtt_status"],      sizeof(cfg.mqtt_status));
+  if (!doc["api_enabled"].isNull())              cfg.api_enabled  = doc["api_enabled"];
+  if (!doc["api_https"].isNull())                cfg.api_https    = doc["api_https"];
+  if (doc["api_host"].is<const char*>())         strlcpy(cfg.api_host,         doc["api_host"],         sizeof(cfg.api_host));
+  if (doc["api_path"].is<const char*>())         strlcpy(cfg.api_path,         doc["api_path"],         sizeof(cfg.api_path));
+  if (!doc["api_port"].isNull())                 cfg.api_port     = doc["api_port"];
+  if (doc["api_user"].is<const char*>())         strlcpy(cfg.api_user,         doc["api_user"],         sizeof(cfg.api_user));
+  if (doc["api_pass"].is<const char*>())         strlcpy(cfg.api_pass,         doc["api_pass"],         sizeof(cfg.api_pass));
+  if (!doc["temp_corr"].isNull())                cfg.temp_corr    = doc["temp_corr"];
+  if (!doc["elevation"].isNull())                cfg.elevation    = doc["elevation"];
+  if (!doc["sleep_min"].isNull())                cfg.sleep_min    = doc["sleep_min"];
+
+  Serial.println("Konfiguration aus EEPROM geladen.");
 }
 
 void saveConfig() {
@@ -534,7 +544,9 @@ void startConfigPortal() {
 }
 
 void setup() {
-  Serial.begin(115200); while (!Serial); delay(200);
+  Serial.begin(115200);
+  { unsigned long t = millis(); while (!Serial && millis() - t < 500); }  // Timeout: kein Blockieren ohne Monitor
+  delay(200);
   Serial.println();
 
   // Konfiguration aus EEPROM laden (oder Defaults verwenden)
@@ -583,14 +595,12 @@ void setup() {
   // FIX v2.6: averaged over 16 ADC reads to reduce ESP8266 ADC noise.
 
   // Voltage divider R1 = 220k+100k+220k =540k and R2=100k
-  float calib_factor = 5.2; // change this value to calibrate the battery voltage
-
   unsigned long raw_total = 0;
   for (int i = 0; i < 16; i++) {
     raw_total += analogRead(A0);
     delay(2);
   }
-  volt = (raw_total / 16.0) * calib_factor / 1024.0;
+  volt = (raw_total / 16.0) * BATTERY_CALIB_FACTOR / 1024.0;
 
   Serial.print("Voltage = ");
   Serial.print(volt, 2);
@@ -1050,7 +1060,7 @@ int CalculateTrend() {
 
 char ZambrettiLetter() {
   Serial.println("---> Calculating Zambretti letter");
-  int(z_trend) = CalculateTrend();
+  int z_trend = CalculateTrend();
   // Case trend is falling
   if (z_trend == -1) {
     float zambretti = 0.0009746 * rel_pressure_rounded * rel_pressure_rounded - 2.1068 * rel_pressure_rounded + 1138.7019;
@@ -1194,7 +1204,7 @@ void ReadFromSPIFFS() {
   Serial.print("Last 12 saved pressure values: ");
   for (int i = 0; i <= 11; i++) {
     temp_data = myDataFile.readStringUntil('\n');
-    pressure_value[i] = temp_data.toInt();
+    pressure_value[i] = temp_data.toFloat();
     Serial.print(pressure_value[i]);
     Serial.print("; ");
   }
@@ -1390,7 +1400,7 @@ void WriteToMQTT() {     // Write the pressure data to MQTT instead to SPIFFS (b
   Serial.print("Outgoing pressure MQTT message: ");
   Serial.println(p_buffer);
 
-  client.publish(mqtt_press_topic, p_buffer, 1);   // , 1 = retained
+  client.publish(cfg.mqtt_press_topic, p_buffer, 1);   // , 1 = retained
   delay(50);
 }
 
