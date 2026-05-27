@@ -273,10 +273,61 @@ Tabelle `measurements` (siehe `schema.sql`):
 
 ---
 
+## Home Assistant Integration
+
+Die API ist als zentraler Verbindungspunkt zwischen der Wetterstation und Home Assistant ausgelegt. Station und HA können in **verschiedenen Netzwerken** liegen – der öffentliche API-Server vermittelt.
+
+```
+SWS (ESP8266)  ──HTTPS POST──▶  api/data.php  ◀──HTTPS GET──  Home Assistant
+                                api/status.php ◀──────────────  (kein Auth)
+                                api/history.php◀──HTTPS GET──  (mit Auth)
+```
+
+### Schnellstart
+
+1. `api/ha_sensors.yaml` in dein HA-Konfigurationsverzeichnis kopieren
+2. In `ha_sensors.yaml` ersetzen:
+   - `dein-server.de` → dein echter Hostname
+   - `YOUR_API_USER` / `YOUR_API_PASS` → Werte aus `api/auth.php`
+3. In `configuration.yaml` einbinden:
+   ```yaml
+   homeassistant:
+     packages:
+       sws: !include ha_sensors.yaml
+   ```
+4. HA neu starten
+
+### Endpunkte für HA
+
+| Endpunkt | Auth | Beschreibung |
+|---|---|---|
+| `GET /api/data.php` | Basic Auth | Letzter Messdatensatz inkl. `data_age_s` |
+| `GET /api/status.php` | – | Health-Check: `fresh`, `last_seen_s` |
+| `GET /api/history.php` | Basic Auth | Historische Daten (`limit`, `from`, `to`) |
+
+### Zusatzfeld `data_age_s`
+
+`GET /api/data.php` liefert zusätzlich:
+```json
+{ "data_age_s": 387 }
+```
+Sekunden seit der letzten Messung – nützlich für HA-Templates und Watchdog-Automationen.
+
+### Enthaltene Automationen (`ha_sensors.yaml`)
+
+| Automation | Auslöser | Aktion |
+|---|---|---|
+| **Batterie niedrig** | Batterie < 20 % | Persistente Benachrichtigung |
+| **Station offline** | `sensor.sws_online = offline` für 30 min | Persistente Benachrichtigung |
+| **Station wieder online** | `sensor.sws_online = online` | Offline-Benachrichtigung ausblenden |
+
+---
+
 ## Changelog
 
 | Version | Datum | Änderung |
 |---|---|---|
+| 1.3 | 2025-06 | Home-Assistant-Integration: `status.php` (Health-Endpoint), CORS-Header in allen Endpunkten, `data_age_s` in `data.php`, `ha_sensors.yaml` mit REST-Sensoren, Template-Sensoren und Automationen |
 | 1.2 | 2025-06 | Konfigurations-Portal per Button: alle Laufzeit-Einstellungen (WiFi, MQTT, API, Elevation …) über Browser konfigurierbar und im EEPROM gespeichert |
 | 1.1 | 2025-06 | `history.php` hinzugefügt (GET mit `limit`, `from`, `to`); gemeinsame `auth.php` für zentrale Credentials |
 | 1.0 | 2025-06 | Initiale API: `data.php` (GET + POST), `history.php` (GET mit limit/from/to), zentrale `auth.php` |

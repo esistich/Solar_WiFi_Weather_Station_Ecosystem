@@ -15,6 +15,21 @@ define('API_USER', 'YOUR_API_USER');   // muss mit Settings26.h übereinstimmen
 define('API_PASS', 'YOUR_API_PASS');   // muss mit Settings26.h übereinstimmen
 
 /**
+ * Setzt CORS-Header damit Home Assistant (und Browser-Dashboards) die API
+ * direkt ansprechen können. Bei OPTIONS-Preflight sofort beenden.
+ */
+function sendCorsHeaders(): void
+{
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+    header('Access-Control-Allow-Headers: Authorization, Content-Type');
+    if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+        http_response_code(204);
+        exit;
+    }
+}
+
+/**
  * Prüft HTTP Basic Auth. Bricht mit 401 ab wenn nicht autorisiert.
  */
 function requireBasicAuth(): void

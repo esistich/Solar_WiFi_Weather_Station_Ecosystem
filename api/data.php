@@ -21,8 +21,7 @@ require_once __DIR__ . '/auth.php';   // Credentials + requireBasicAuth()
 require_once __DIR__ . '/db.php';
 
 header('Content-Type: application/json; charset=utf-8');
-
-// Hilfsfunktionen -----------------------------------------------------------
+sendCorsHeaders();
 
 function sendJson(int $status, array $data): void
 {
@@ -63,6 +62,9 @@ if ($method === 'GET') {
 		$row['battery_pct']      = (int)   $row['battery_pct'];
 		$row['wifi_strength']    = (int)   $row['wifi_strength'];
 		$row['device_timestamp'] = (int)   $row['device_timestamp'];
+
+		// Alter der letzten Messung in Sekunden (nützlich für HA-Watchdog)
+		$row['data_age_s'] = (int)(time() - strtotime($row['created_at']));
 
 		sendJson(200, $row);
 

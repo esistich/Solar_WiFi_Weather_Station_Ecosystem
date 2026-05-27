@@ -1,0 +1,265 @@
+# ============================================================
+# Home Assistant – Solar WiFi Weather Station Integration
+# ============================================================
+# Anleitung:
+# 1. Diese Datei in dein HA-Konfigurationsverzeichnis kopieren
+#    oder den Inhalt in configuration.yaml einfügen.
+# 2. Alle "dein-server.de" durch deinen echten Hostnamen ersetzen.
+# 3. YOUR_API_USER / YOUR_API_PASS durch die Werte aus api/auth.php ersetzen.
+# 4. HA neu starten oder "Konfiguration neu laden".
+#
+# Endpunkte:
+#   GET https://dein-server.de/api/data.php    → letzter Messwert (Basic Auth)
+#   GET https://dein-server.de/api/status.php  → Health / Watchdog (kein Auth)
+#   GET https://dein-server.de/api/history.php → Historie (Basic Auth)
+# ============================================================
+
+# ------------------------------------------------------------------
+# REST-Sensoren (Rohdaten von der API)
+# ------------------------------------------------------------------
+sensor:
+
+  # Haupt-Sensor: lädt alle Messdaten in einem Request
+  - platform: rest
+    name: "SWS Wetterstation"
+    unique_id: sws_rest_main
+    resource: "https://dein-server.de/api/data.php"
+    authentication: basic
+    username: YOUR_API_USER
+    password: YOUR_API_PASS
+    verify_ssl: true
+    # Etwas länger als Sleep-Intervall (Standard: 10 min = 600s)
+    scan_interval: 660
+    value_template: "{{ value_json.temperature | float | round(1) }}"
+    unit_of_measurement: "°C"
+    device_class: temperature
+    json_attributes:
+      - humidity
+      - rel_pressure
+      - abs_pressure
+      - dewpoint
+      - dewpoint_spread
+      - heat_index
+      - zambretti_says
+      - trend_text
+      - trend_value
+      - pressure_state
+      - battery_volt
+      - battery_pct
+      - wifi_strength
+      - station_name
+      - created_at
+      - data_age_s
+
+  # Watchdog: kein Auth nötig, HA kann Verfügbarkeit überwachen
+  - platform: rest
+    name: "SWS Status"
+    unique_id: sws_rest_status
+    resource: "https://dein-server.de/api/status.php"
+    verify_ssl: true
+    scan_interval: 120
+    value_template: "{{ value_json.status }}"
+    json_attributes:
+      - last_seen_s
+      - fresh
+      - station_name
+      - created_at
+
+# ------------------------------------------------------------------
+# Template-Sensoren (aus den json_attributes des Haupt-Sensors)
+# ------------------------------------------------------------------
+template:
+  - sensor:
+      - name: "SWS Luftfeuchtigkeit"
+        unique_id: sws_humidity
+        unit_of_measurement: "%"
+        device_class: humidity
+        state_class: measurement
+        state: >
+          {{ state_attr('sensor.sws_wetterstation', 'humidity') | float | round(1) }}
+
+      - name: "SWS Luftdruck rel."
+        unique_id: sws_pressure_rel
+        unit_of_measurement: "hPa"
+        device_class: pressure
+        state_class: measurement
+        state: >
+          {{ state_attr('sensor.sws_wetterstation', 'rel_pressure') | int }}
+
+      - name: "SWS Luftdruck abs."
+        unique_id: sws_pressure_abs
+        unit_of_measurement: "hPa"
+        device_class: pressure
+        state_class: measurement
+        state: >
+          {{ state_attr('sensor.sws_wetterstation', 'abs_pressure') | float | round(1) }}
+
+      - name: "SWS Taupunkt"
+        unique_id: sws_dewpoint
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: >
+          {{ state_attr('sensor.sws_wetterstation', 'dewpoint') | float | round(1) }}
+
+      - name: "SWS Taupunktabstand"
+        unique_id: sws_dewpoint_spread
+        unit_of_measurement: "°C"
+        icon: mdi:thermometer-chevron-up
+        state_class: measurement
+        state: >
+          {{ state_attr('sensor.sws_wetterstation', 'dewpoint_spread') | float | round(1) }}
+
+      - name: "SWS Hitzeindex"
+        unique_id: sws_heatindex
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: >
+          {{ state_attr('sensor.sws_wetterstation', 'heat_index') | float | round(1) }}
+
+      - name: "SWS Wettervorhersage"
+        unique_id: sws_forecast
+        icon: mdi:weather-partly-cloudy
+        state: >
+          {{ state_attr('sensor.sws_wetterstation', 'zambretti_says') }}
+
+      - name: "SWS Trend"
+        unique_id: sws_trend
+        icon: mdi:trending-up
+        state: >
+          {{ state_attr('sensor.sws_wetterstation', 'trend_text') }}
+
+      - name: "SWS Luftdruckzustand"
+        unique_id: sws_pressure_state
+        icon: mdi:gauge
+        state: >
+          {{ state_attr('sensor.sws_wetterstation', 'pressure_state') }}
+
+      - name: "SWS Batterie"
+        unique_id: sws_battery_volt
+        unit_of_measurement: "V"
+        device_class: voltage
+        state_class: measurement
+        state: >
+          {{ state_attr('sensor.sws_wetterstation', 'battery_volt') | float | round(2) }}
+
+      - name: "SWS Batterie %"
+        unique_id: sws_battery_pct
+        unit_of_measurement: "%"
+        device_class: battery
+        state_class: measurement
+        state: >
+          {{ state_attr('sensor.sws_wetterstation', 'battery_pct') | int }}
+
+      - name: "SWS WLAN-Signal"
+        unique_id: sws_rssi
+        unit_of_measurement: "dBm"
+        device_class: signal_strength
+        state_class: measurement
+        state: >
+          {{ state_attr('sensor.sws_wetterstation', 'wifi_strength') | int }}
+
+      - name: "SWS Datensatz-Alter"
+        unique_id: sws_data_age
+        unit_of_measurement: "s"
+        icon: mdi:clock-outline
+        state_class: measurement
+        state: >
+          {{ state_attr('sensor.sws_wetterstation', 'data_age_s') | int }}
+
+      - name: "SWS Online"
+        unique_id: sws_online
+        icon: >
+          {% if state_attr('sensor.sws_status', 'fresh') %}
+            mdi:check-network
+          {% else %}
+            mdi:network-off
+          {% endif %}
+        state: >
+          {{ 'online' if state_attr('sensor.sws_status', 'fresh') else 'offline' }}
+
+# ------------------------------------------------------------------
+# Lovelace-Dashboard (entities-Karte)
+# In HA unter Einstellungen → Dashboards als manuelle Karte einfügen
+# ------------------------------------------------------------------
+# type: entities
+# title: ☀️ Solar Wetterstation
+# entities:
+#   - entity: sensor.sws_wetterstation
+#     name: Temperatur
+#   - entity: sensor.sws_luftfeuchtigkeit
+#   - entity: sensor.sws_luftdruck_rel
+#   - entity: sensor.sws_taupunkt
+#   - entity: sensor.sws_wettervorhersage
+#   - entity: sensor.sws_trend
+#   - entity: sensor.sws_luftdruckzustand
+#   - entity: sensor.sws_batterie
+#   - entity: sensor.sws_batterie_
+#   - entity: sensor.sws_wlan_signal
+#   - entity: sensor.sws_datensatz_alter
+#   - entity: sensor.sws_online
+
+# ------------------------------------------------------------------
+# Automationen
+# ------------------------------------------------------------------
+automation:
+
+  # Warnung wenn Batterie unter 20%
+  - alias: "SWS Batterie niedrig"
+    id: sws_battery_low
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.sws_batterie_
+        below: 20
+    condition:
+      - condition: template
+        value_template: "{{ state_attr('sensor.sws_status', 'fresh') }}"
+    action:
+      - service: persistent_notification.create
+        data:
+          title: "⚡ SWS Batterie niedrig"
+          message: >
+            Batterie: {{ states('sensor.sws_batterie_') }}%
+            ({{ states('sensor.sws_batterie') }} V)
+          notification_id: sws_battery_low
+
+  # Warnung wenn Station seit > 30 min keine Daten gesendet hat
+  - alias: "SWS Station offline"
+    id: sws_station_offline
+    trigger:
+      - platform: state
+        entity_id: sensor.sws_online
+        to: "offline"
+        for:
+          minutes: 30
+    action:
+      - service: persistent_notification.create
+        data:
+          title: "📡 SWS Station offline"
+          message: >
+            Keine Messdaten seit
+            {{ (state_attr('sensor.sws_status', 'last_seen_s') / 60) | int }} Minuten.
+            Letzte Messung: {{ state_attr('sensor.sws_status', 'created_at') }}
+          notification_id: sws_station_offline
+
+  # Benachrichtigung wenn Station wieder online
+  - alias: "SWS Station wieder online"
+    id: sws_station_online
+    trigger:
+      - platform: state
+        entity_id: sensor.sws_online
+        to: "online"
+    condition:
+      - condition: state
+        entity_id: persistent_notification.sws_station_offline
+        state: "notifying"
+    action:
+      - service: persistent_notification.dismiss
+        data:
+          notification_id: sws_station_offline
+      - service: persistent_notification.create
+        data:
+          title: "✅ SWS Station wieder online"
+          message: "Wetterstation sendet wieder Daten."
+          notification_id: sws_station_online

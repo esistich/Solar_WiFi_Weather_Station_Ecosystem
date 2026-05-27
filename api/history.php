@@ -31,6 +31,7 @@ require_once __DIR__ . '/auth.php';   // Credentials + requireBasicAuth()
 require_once __DIR__ . '/db.php';
 
 header('Content-Type: application/json; charset=utf-8');
+sendCorsHeaders();
 
 // Nur GET erlaubt
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
