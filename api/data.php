@@ -25,7 +25,12 @@ sendCorsHeaders();
 
 function sendJson(int $status, array $data): void
 {
-	http_response_code($status);
+	// Varnish verschluckt 4xx/5xx-Bodies – immer HTTP 200 senden,
+	// Fehlercode im JSON-Feld 'http_status' transportieren.
+	if ($status !== 200) {
+		$data['http_status'] = $status;
+	}
+	http_response_code(200);
 	echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 	exit;
 }

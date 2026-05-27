@@ -39,7 +39,7 @@ try {
 	$row = $stmt->fetch();
 
 	if ($row === false) {
-		http_response_code(503);
+		http_response_code(200);
 		echo json_encode([
 			'status'       => 'no_data',
 			'last_seen_s'  => null,
@@ -62,7 +62,7 @@ try {
 	], JSON_UNESCAPED_UNICODE);
 
 } catch (PDOException $e) {
-	http_response_code(503);
+	http_response_code(200);
 	echo json_encode([
 		'status' => 'db_error',
 		'error'  => $e->getMessage(),
