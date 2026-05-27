@@ -2,20 +2,15 @@
 # Solar WiFi Weather Station – API Verzeichnisschutz
 # ============================================================
 
-# Hilfsdateien vor Direktzugriff schützen
-<FilesMatch "^(auth|db)\.php$">
-	Require all denied
-</FilesMatch>
-
 # Verzeichnislisting deaktivieren
 Options -Indexes
 
-# Nur erlaubte Dateien direkt aufrufen
-<FilesMatch "\.(php|html)$">
-	Require all granted
-</FilesMatch>
-
-# HTTPS erzwingen
-RewriteEngine On
-RewriteCond %{HTTPS} off
-RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+# Hilfsdateien vor Direktzugriff schützen
+<Files "auth.php">
+	Order allow,deny
+	Deny from all
+</Files>
+<Files "db.php">
+	Order allow,deny
+	Deny from all
+</Files>
