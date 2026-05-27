@@ -11,8 +11,8 @@
  *   </Files>
  */
 
-define('API_USER', 'YOUR_API_USER');   // muss mit Settings26.h übereinstimmen
-define('API_PASS', 'YOUR_API_PASS');   // muss mit Settings26.h übereinstimmen
+define('API_USER', 'NAy1b4GpuS3dEvej');
+define('API_PASS', 'REDACTED_API_PASS');
 
 /**
  * Setzt CORS-Header damit Home Assistant (und Browser-Dashboards) die API

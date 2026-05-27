@@ -61,8 +61,8 @@ define('DB_PASS', 'YOUR_DB_PASS');
 **`api/auth.php`** – API-Zugangsdaten (gelten für alle Endpunkte):
 
 ```php
-define('API_USER', 'YOUR_API_USER');
-define('API_PASS', 'YOUR_API_PASS');
+define('API_USER', 'NAy1b4GpuS3dEvej');
+define('API_PASS', 'REDACTED_API_PASS');
 ```
 
 > Diese Werte müssen mit `api_user` / `api_pass` in `Settings26.h` des Sketches übereinstimmen.
@@ -83,11 +83,11 @@ jederzeit überschrieben werden:
 // Compile-Zeit-Fallbacks (im Portal überschreibbar):
 #define CFG_DEFAULT_API_ENABLED   true
 #define CFG_DEFAULT_API_HTTPS     true
-#define CFG_DEFAULT_API_HOST      "dein-server.de"
+#define CFG_DEFAULT_API_HOST      "timm-sander.net"
 #define CFG_DEFAULT_API_PATH      "/api/data.php"
 #define CFG_DEFAULT_API_PORT      443
-#define CFG_DEFAULT_API_USER      "YOUR_API_USER"   // muss mit auth.php übereinstimmen
-#define CFG_DEFAULT_API_PASS      "YOUR_API_PASS"   // muss mit auth.php übereinstimmen
+#define CFG_DEFAULT_API_USER      "NAy1b4GpuS3dEvej"   // muss mit auth.php übereinstimmen
+#define CFG_DEFAULT_API_PASS      "REDACTED_API_PASS"   // muss mit auth.php übereinstimmen
 ```
 
 > HTTPS wird empfohlen. Das Zertifikat wird nicht geprüft (`setInsecure()`), die
@@ -121,7 +121,7 @@ Der Sketch nutzt `WiFiClientSecure` mit `setInsecure()` – die Verbindung ist v
 Liefert den neuesten Datensatz als JSON-Objekt. **Keine Authentifizierung erforderlich.**
 
 ```bash
-curl https://dein-server.de/api/data.php
+curl https://timm-sander.net/swsapi/data.php
 ```
 
 **Response `200 OK`:**
@@ -160,7 +160,7 @@ Wird automatisch vom Sketch aufgerufen. **HTTP Basic Auth erforderlich.**
 curl -u station:passwort \
 	 -H "Content-Type: application/json" \
 	 -d '{"temperature":21.5,"humidity":58.3,"absolutepressure":960.12,...}' \
-	 https://dein-server.de/api/data.php
+	 https://timm-sander.net/swsapi/data.php
 ```
 
 **Pflichtfelder im JSON-Body:**
@@ -200,18 +200,18 @@ Sortierung: neueste Einträge zuerst (`ORDER BY id DESC`).
 
 ```bash
 # Letzte 100 Einträge (Standard)
-curl -u station:passwort https://dein-server.de/api/history.php
+curl -u station:passwort https://timm-sander.net/swsapi/history.php
 
 # Letzte 50 Einträge
-curl -u station:passwort "https://dein-server.de/api/history.php?limit=50"
+curl -u station:passwort "https://timm-sander.net/swsapi/history.php?limit=50"
 
 # Bestimmter Zeitraum
 curl -u station:passwort \
-	 "https://dein-server.de/api/history.php?from=2025-01-01&to=2025-06-30"
+	 "https://timm-sander.net/swsapi/history.php?from=2025-01-01&to=2025-06-30"
 
 # Kombiniert
 curl -u station:passwort \
-	 "https://dein-server.de/api/history.php?from=2025-06-01&limit=200"
+	 "https://timm-sander.net/swsapi/history.php?from=2025-06-01&limit=200"
 ```
 
 **Response `200 OK`:**
@@ -298,8 +298,9 @@ SWS (ESP8266)  ──HTTPS POST──▶  api/data.php  ◀──HTTPS GET──
 
 1. `api/ha_sensors.yaml` in dein HA-Konfigurationsverzeichnis kopieren
 2. In `ha_sensors.yaml` ersetzen:
-   - `dein-server.de` → dein echter Hostname
-   - `YOUR_API_USER` / `YOUR_API_PASS` → Werte aus `api/auth.php`
+   - `timm-sander.net/swsapi` → bereits korrekt
+   - `NAy1b4GpuS3dEvej` → `NAy1b4GpuS3dEvej`
+   - `REDACTED_API_PASS` → `REDACTED_API_PASS`
 3. In `configuration.yaml` einbinden:
    ```yaml
    homeassistant:

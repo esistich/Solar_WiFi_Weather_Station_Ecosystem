@@ -92,13 +92,13 @@ const String App1 = "BLYNK";         // empty string if not applicable -> "" els
 
 /****** REST-API Settings (Compile-Zeit-Fallbacks) **************************/
 
-#define CFG_DEFAULT_API_ENABLED   false
+#define CFG_DEFAULT_API_ENABLED   true
 #define CFG_DEFAULT_API_HTTPS     true
-#define CFG_DEFAULT_API_HOST      "dein-server.de"
-#define CFG_DEFAULT_API_PATH      "/api/data.php"
+#define CFG_DEFAULT_API_HOST      "timm-sander.net"
+#define CFG_DEFAULT_API_PATH      "/swsapi/data.php"
 #define CFG_DEFAULT_API_PORT      443
-#define CFG_DEFAULT_API_USER      "YOUR_API_USER"
-#define CFG_DEFAULT_API_PASS      "YOUR_API_PASS"
+#define CFG_DEFAULT_API_USER      "NAy1b4GpuS3dEvej"
+#define CFG_DEFAULT_API_PASS      "REDACTED_API_PASS"
 
 /****** Additional Settings (Compile-Zeit-Fallbacks) ************************/
 
