@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------------------------------------
-  Project Name : Solar Powered WiFi Weather Station V2.6
+  Project Name : Solar Powered WiFi Weather Station V2.7
   Features: temperature, dewpoint, dewpoint spread, heat index, humidity, absolute pressure, relative pressure, battery status and
   the famous Zambretti Forecaster (multi lingual)
   Authors: Keith Hungerford, Debasish Dutta and Marc Stähli
@@ -13,6 +13,25 @@
 
   ====================================================================
   Version History (recent):
+
+  v2.7 (Juni 2025) - Konfigurations-Portal, PHP/MySQL-API & Historien-Endpoint
+  - Neues AP-Konfigurations-Portal (GPIO0 beim Boot gedrückt halten):
+    - ESP8266 öffnet WLAN-Accesspoint "SWS-Config" (kein Passwort)
+    - Webinterface unter 192.168.4.1 zum Einstellen von WiFi, MQTT, API,
+      Temperaturkorrektur, Elevation und Schlaf-Intervall
+    - Alle Einstellungen werden als JSON im EEPROM gespeichert (Magic: SWS2)
+    - Settings26.h bleibt als Compile-Zeit-Fallback erhalten
+    - Portal schließt sich nach 60 s automatisch (danach Neustart)
+  - PHP/MySQL-REST-API (api/):
+    - data.php  : POST neue Messung / GET letzten Datensatz
+    - history.php: GET Historien-Daten (limit, from, to)
+    - auth.php  : zentrale HTTP-Basic-Auth-Prüfung
+    - schema.sql: vollständiges Datenbankschema
+    - README.md : Installations- und Nutzungsdokumentation
+  - Sketch-seitige API-Anbindung (sendToAPI()):
+    - HTTP oder HTTPS (Laufzeit-Auswahl über cfg.api_https)
+    - Basic-Auth per Base64-Encoder
+  - Alle Laufzeit-Einstellungen auf cfg.*-Struct umgestellt
 
   v2.6 (April 2026) - SHT45 migration, configurable sensors & robustness pass
   - Replaced HDC1080 (failed after ~5 years outdoor) with Sensirion SHT45
@@ -119,6 +138,10 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
 #include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include <WiFiClientSecure.h>
+#include <ESP8266WebServer.h>       // Konfigurations-Portal
+#include <EEPROM.h>                 // Persistente Einstellungen
 #include <ArduinoJson.h>
 #include <BlynkSimpleEsp8266.h>     // https://github.com/blynkkk/blynk-library
 #include <WiFiUdp.h>
@@ -126,6 +149,147 @@
 #include <EasyNTPClient.h>          // https://github.com/aharshac/EasyNTPClient
 #include <TimeLib.h>                // https://github.com/PaulStoffregen/Time.git
 #include <PubSubClient.h>           // For MQTT (in this case publishing only)
+
+// =====================================================================
+// Laufzeit-Konfiguration (geladen aus EEPROM, Fallback: CFG_DEFAULT_*)
+// =====================================================================
+struct StationConfig {
+  char  station_name[64];
+  char  wifi_ssid[64];
+  char  wifi_pass[64];
+  // MQTT
+  bool  mqtt_enabled;
+  char  mqtt_server[64];
+  int   mqtt_port;
+  char  mqtt_user[32];
+  char  mqtt_pass[32];
+  char  mqtt_topic[80];
+  char  mqtt_press_topic[80];
+  char  mqtt_status[80];
+  // REST-API
+  bool  api_enabled;
+  bool  api_https;
+  char  api_host[64];
+  char  api_path[64];
+  int   api_port;
+  char  api_user[32];
+  char  api_pass[32];
+  // Sonstiges
+  float temp_corr;
+  int   elevation;
+  int   sleep_min;
+};
+
+StationConfig cfg;  // globale Instanz – überall im Sketch verwendet
+
+// EEPROM-Magic-Bytes: zeigen an, dass gültige Daten gespeichert sind
+static const uint8_t EEPROM_MAGIC[4] = { 0x53, 0x57, 0x53, 0x32 };  // "SWS2"
+static const int     EEPROM_SIZE     = 2048;
+static const int     EEPROM_DATA_OFFSET = 4;
+
+void loadConfig() {
+  EEPROM.begin(EEPROM_SIZE);
+
+  // Magic-Bytes prüfen
+  bool valid = true;
+  for (int i = 0; i < 4; i++) {
+    if (EEPROM.read(i) != EEPROM_MAGIC[i]) { valid = false; break; }
+  }
+
+  if (valid) {
+    // JSON aus EEPROM lesen
+    char buf[EEPROM_SIZE - EEPROM_DATA_OFFSET];
+    for (int i = 0; i < (int)sizeof(buf); i++) {
+      buf[i] = (char)EEPROM.read(EEPROM_DATA_OFFSET + i);
+    }
+    JsonDocument doc;
+    if (deserializeJson(doc, buf) == DeserializationError::Ok) {
+      strlcpy(cfg.station_name,      doc["station_name"]      | CFG_DEFAULT_STATION_NAME, sizeof(cfg.station_name));
+      strlcpy(cfg.wifi_ssid,         doc["wifi_ssid"]         | CFG_DEFAULT_WIFI_SSID,    sizeof(cfg.wifi_ssid));
+      strlcpy(cfg.wifi_pass,         doc["wifi_pass"]         | CFG_DEFAULT_WIFI_PASS,    sizeof(cfg.wifi_pass));
+      cfg.mqtt_enabled = doc["mqtt_enabled"] | CFG_DEFAULT_MQTT_ENABLED;
+      strlcpy(cfg.mqtt_server,       doc["mqtt_server"]       | CFG_DEFAULT_MQTT_SERVER,       sizeof(cfg.mqtt_server));
+      cfg.mqtt_port    = doc["mqtt_port"]    | CFG_DEFAULT_MQTT_PORT;
+      strlcpy(cfg.mqtt_user,         doc["mqtt_user"]         | CFG_DEFAULT_MQTT_USER,         sizeof(cfg.mqtt_user));
+      strlcpy(cfg.mqtt_pass,         doc["mqtt_pass"]         | CFG_DEFAULT_MQTT_PASS,         sizeof(cfg.mqtt_pass));
+      strlcpy(cfg.mqtt_topic,        doc["mqtt_topic"]        | CFG_DEFAULT_MQTT_TOPIC,        sizeof(cfg.mqtt_topic));
+      strlcpy(cfg.mqtt_press_topic,  doc["mqtt_press_topic"]  | CFG_DEFAULT_MQTT_PRESS_TOPIC,  sizeof(cfg.mqtt_press_topic));
+      strlcpy(cfg.mqtt_status,       doc["mqtt_status"]       | CFG_DEFAULT_MQTT_STATUS,       sizeof(cfg.mqtt_status));
+      cfg.api_enabled  = doc["api_enabled"]  | CFG_DEFAULT_API_ENABLED;
+      cfg.api_https    = doc["api_https"]    | CFG_DEFAULT_API_HTTPS;
+      strlcpy(cfg.api_host,          doc["api_host"]          | CFG_DEFAULT_API_HOST,          sizeof(cfg.api_host));
+      strlcpy(cfg.api_path,          doc["api_path"]          | CFG_DEFAULT_API_PATH,          sizeof(cfg.api_path));
+      cfg.api_port     = doc["api_port"]     | CFG_DEFAULT_API_PORT;
+      strlcpy(cfg.api_user,          doc["api_user"]          | CFG_DEFAULT_API_USER,          sizeof(cfg.api_user));
+      strlcpy(cfg.api_pass,          doc["api_pass"]          | CFG_DEFAULT_API_PASS,          sizeof(cfg.api_pass));
+      cfg.temp_corr    = doc["temp_corr"]    | CFG_DEFAULT_TEMP_CORR;
+      cfg.elevation    = doc["elevation"]    | CFG_DEFAULT_ELEVATION;
+      cfg.sleep_min    = doc["sleep_min"]    | CFG_DEFAULT_SLEEP_MIN;
+      Serial.println("Konfiguration aus EEPROM geladen.");
+      return;
+    }
+  }
+
+  // Kein gültiges EEPROM → Compile-Zeit-Defaults verwenden
+  Serial.println("EEPROM leer/ungültig – verwende Compile-Zeit-Defaults.");
+  strlcpy(cfg.station_name,     CFG_DEFAULT_STATION_NAME,     sizeof(cfg.station_name));
+  strlcpy(cfg.wifi_ssid,        CFG_DEFAULT_WIFI_SSID,        sizeof(cfg.wifi_ssid));
+  strlcpy(cfg.wifi_pass,        CFG_DEFAULT_WIFI_PASS,        sizeof(cfg.wifi_pass));
+  cfg.mqtt_enabled = CFG_DEFAULT_MQTT_ENABLED;
+  strlcpy(cfg.mqtt_server,      CFG_DEFAULT_MQTT_SERVER,      sizeof(cfg.mqtt_server));
+  cfg.mqtt_port    = CFG_DEFAULT_MQTT_PORT;
+  strlcpy(cfg.mqtt_user,        CFG_DEFAULT_MQTT_USER,        sizeof(cfg.mqtt_user));
+  strlcpy(cfg.mqtt_pass,        CFG_DEFAULT_MQTT_PASS,        sizeof(cfg.mqtt_pass));
+  strlcpy(cfg.mqtt_topic,       CFG_DEFAULT_MQTT_TOPIC,       sizeof(cfg.mqtt_topic));
+  strlcpy(cfg.mqtt_press_topic, CFG_DEFAULT_MQTT_PRESS_TOPIC, sizeof(cfg.mqtt_press_topic));
+  strlcpy(cfg.mqtt_status,      CFG_DEFAULT_MQTT_STATUS,      sizeof(cfg.mqtt_status));
+  cfg.api_enabled  = CFG_DEFAULT_API_ENABLED;
+  cfg.api_https    = CFG_DEFAULT_API_HTTPS;
+  strlcpy(cfg.api_host,         CFG_DEFAULT_API_HOST,         sizeof(cfg.api_host));
+  strlcpy(cfg.api_path,         CFG_DEFAULT_API_PATH,         sizeof(cfg.api_path));
+  cfg.api_port     = CFG_DEFAULT_API_PORT;
+  strlcpy(cfg.api_user,         CFG_DEFAULT_API_USER,         sizeof(cfg.api_user));
+  strlcpy(cfg.api_pass,         CFG_DEFAULT_API_PASS,         sizeof(cfg.api_pass));
+  cfg.temp_corr    = CFG_DEFAULT_TEMP_CORR;
+  cfg.elevation    = CFG_DEFAULT_ELEVATION;
+  cfg.sleep_min    = CFG_DEFAULT_SLEEP_MIN;
+}
+
+void saveConfig() {
+  JsonDocument doc;
+  doc["station_name"]     = cfg.station_name;
+  doc["wifi_ssid"]        = cfg.wifi_ssid;
+  doc["wifi_pass"]        = cfg.wifi_pass;
+  doc["mqtt_enabled"]     = cfg.mqtt_enabled;
+  doc["mqtt_server"]      = cfg.mqtt_server;
+  doc["mqtt_port"]        = cfg.mqtt_port;
+  doc["mqtt_user"]        = cfg.mqtt_user;
+  doc["mqtt_pass"]        = cfg.mqtt_pass;
+  doc["mqtt_topic"]       = cfg.mqtt_topic;
+  doc["mqtt_press_topic"] = cfg.mqtt_press_topic;
+  doc["mqtt_status"]      = cfg.mqtt_status;
+  doc["api_enabled"]      = cfg.api_enabled;
+  doc["api_https"]        = cfg.api_https;
+  doc["api_host"]         = cfg.api_host;
+  doc["api_path"]         = cfg.api_path;
+  doc["api_port"]         = cfg.api_port;
+  doc["api_user"]         = cfg.api_user;
+  doc["api_pass"]         = cfg.api_pass;
+  doc["temp_corr"]        = cfg.temp_corr;
+  doc["elevation"]        = cfg.elevation;
+  doc["sleep_min"]        = cfg.sleep_min;
+
+  char buf[EEPROM_SIZE - EEPROM_DATA_OFFSET];
+  serializeJson(doc, buf, sizeof(buf));
+
+  EEPROM.begin(EEPROM_SIZE);
+  for (int i = 0; i < 4; i++) EEPROM.write(i, EEPROM_MAGIC[i]);
+  for (int i = 0; i < (int)strlen(buf) + 1; i++) {
+    EEPROM.write(EEPROM_DATA_OFFSET + i, buf[i]);
+  }
+  EEPROM.commit();
+  Serial.println("Konfiguration im EEPROM gespeichert.");
+}
 
 
 #if USE_DS18B20
@@ -208,11 +372,183 @@ volatile bool mqtt_data_received = false;
 WiFiClient espClient;               // MQTT
 PubSubClient client(espClient);     // MQTT
 
+// =====================================================================
+// Konfigurations-Portal
+// Gestartet wenn CONFIG_BUTTON_PIN beim Aufwachen LOW ist.
+// Der ESP öffnet einen Access Point (SSID: SWS-Config) und stellt
+// unter http://192.168.4.1 ein HTML-Formular bereit.
+// Nach dem Speichern oder nach CONFIG_TIMEOUT_S Sekunden: Neustart.
+// =====================================================================
+void startConfigPortal() {
+  Serial.println("\n*** Konfigurations-Portal gestartet ***");
+  Serial.print("WLAN-Name: "); Serial.println(CONFIG_AP_SSID);
+  Serial.println("IP: 192.168.4.1");
+
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(CONFIG_AP_SSID);
+  delay(500);
+
+  ESP8266WebServer server(80);
+
+  // ---- HTML-Hilfsfunktion ----
+  auto field = [](const char* label, const char* name, const char* val, int maxlen = 64) -> String {
+    String s = "<tr><td><label>" + String(label) + "</label></td><td>"
+               "<input name='" + name + "' value='" + String(val) + "' maxlength='" + String(maxlen) + "'></td></tr>";
+    return s;
+  };
+  auto fieldInt = [](const char* label, const char* name, int val) -> String {
+    String s = "<tr><td><label>" + String(label) + "</label></td><td>"
+               "<input type='number' name='" + name + "' value='" + String(val) + "'></td></tr>";
+    return s;
+  };
+  auto fieldFloat = [](const char* label, const char* name, float val) -> String {
+    String s = "<tr><td><label>" + String(label) + "</label></td><td>"
+               "<input type='number' step='0.1' name='" + name + "' value='" + String(val, 1) + "'></td></tr>";
+    return s;
+  };
+  auto fieldCheck = [](const char* label, const char* name, bool val) -> String {
+    String chk = val ? " checked" : "";
+    return "<tr><td><label>" + String(label) + "</label></td><td>"
+           "<input type='checkbox' name='" + String(name) + "' value='1'" + chk + "></td></tr>";
+  };
+
+  // ---- GET: Formular anzeigen ----
+  server.on("/", HTTP_GET, [&]() {
+    String html = R"(<!DOCTYPE html><html><head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>SWS Konfiguration</title>
+<style>
+  body{font-family:sans-serif;max-width:540px;margin:20px auto;padding:0 12px;background:#f4f4f4}
+  h1{color:#2c7a2c;font-size:1.3em}
+  h2{color:#555;font-size:1em;border-bottom:1px solid #ccc;padding-bottom:4px;margin-top:20px}
+  table{width:100%;border-collapse:collapse}
+  td{padding:5px 4px;vertical-align:middle}
+  td:first-child{width:45%;font-size:.9em;color:#333}
+  input[type=text],input[type=number],input[type=password]{width:100%;padding:4px;box-sizing:border-box;border:1px solid #bbb;border-radius:3px}
+  input[type=checkbox]{width:18px;height:18px}
+  .btn{background:#2c7a2c;color:#fff;border:none;padding:10px 28px;border-radius:4px;font-size:1em;cursor:pointer;margin-top:16px;width:100%}
+  .note{font-size:.8em;color:#888;margin-top:8px}
+  .saved{background:#e8f5e9;border:1px solid #2c7a2c;padding:10px;border-radius:4px;margin-bottom:12px}
+</style></head><body>
+<h1>&#9728; Solar Weather Station</h1>
+<h2>Konfiguration</h2>
+<form method='POST' action='/save'>
+<h2>WLAN</h2><table>)";
+
+    html += field("Stationsname", "station_name", cfg.station_name);
+    html += field("WLAN SSID", "wifi_ssid", cfg.wifi_ssid);
+    html += field("WLAN Passwort", "wifi_pass", cfg.wifi_pass, 64);
+
+    html += "</table><h2>MQTT</h2><table>";
+    html += fieldCheck("MQTT aktiv", "mqtt_enabled", cfg.mqtt_enabled);
+    html += field("Broker", "mqtt_server", cfg.mqtt_server);
+    html += fieldInt("Port", "mqtt_port", cfg.mqtt_port);
+    html += field("Benutzer", "mqtt_user", cfg.mqtt_user, 32);
+    html += field("Passwort", "mqtt_pass", cfg.mqtt_pass, 32);
+    html += field("Topic", "mqtt_topic", cfg.mqtt_topic, 80);
+    html += field("Druck-Topic", "mqtt_press_topic", cfg.mqtt_press_topic, 80);
+    html += field("Status-Topic", "mqtt_status", cfg.mqtt_status, 80);
+
+    html += "</table><h2>REST-API</h2><table>";
+    html += fieldCheck("API aktiv", "api_enabled", cfg.api_enabled);
+    html += fieldCheck("HTTPS", "api_https", cfg.api_https);
+    html += field("Host", "api_host", cfg.api_host);
+    html += field("Pfad", "api_path", cfg.api_path);
+    html += fieldInt("Port", "api_port", cfg.api_port);
+    html += field("Benutzer", "api_user", cfg.api_user, 32);
+    html += field("Passwort", "api_pass", cfg.api_pass, 32);
+
+    html += "</table><h2>Sonstiges</h2><table>";
+    html += fieldFloat("Temp-Korrektur (°C)", "temp_corr", cfg.temp_corr);
+    html += fieldInt("Höhe ü. NN (m)", "elevation", cfg.elevation);
+    html += fieldInt("Schlafzeit (min)", "sleep_min", cfg.sleep_min);
+
+    html += R"(</table>
+<button class='btn' type='submit'>Speichern &amp; Neustart</button>
+<p class='note'>Das Portal schlie&szlig;t sich automatisch nach )"
+          + String(CONFIG_TIMEOUT_S) +
+          R"( Sekunden.</p>
+</form></body></html>)";
+
+    server.send(200, "text/html", html);
+  });
+
+  // ---- POST: Werte speichern ----
+  server.on("/save", HTTP_POST, [&]() {
+    auto get = [&](const char* key, const char* def) -> String {
+      return server.hasArg(key) ? server.arg(key) : String(def);
+    };
+
+    strlcpy(cfg.station_name,     get("station_name",    cfg.station_name).c_str(),     sizeof(cfg.station_name));
+    strlcpy(cfg.wifi_ssid,        get("wifi_ssid",       cfg.wifi_ssid).c_str(),         sizeof(cfg.wifi_ssid));
+    strlcpy(cfg.wifi_pass,        get("wifi_pass",       cfg.wifi_pass).c_str(),         sizeof(cfg.wifi_pass));
+    cfg.mqtt_enabled = server.hasArg("mqtt_enabled");
+    strlcpy(cfg.mqtt_server,      get("mqtt_server",     cfg.mqtt_server).c_str(),       sizeof(cfg.mqtt_server));
+    cfg.mqtt_port    = get("mqtt_port",     String(cfg.mqtt_port).c_str()).toInt();
+    strlcpy(cfg.mqtt_user,        get("mqtt_user",       cfg.mqtt_user).c_str(),         sizeof(cfg.mqtt_user));
+    strlcpy(cfg.mqtt_pass,        get("mqtt_pass",       cfg.mqtt_pass).c_str(),         sizeof(cfg.mqtt_pass));
+    strlcpy(cfg.mqtt_topic,       get("mqtt_topic",      cfg.mqtt_topic).c_str(),        sizeof(cfg.mqtt_topic));
+    strlcpy(cfg.mqtt_press_topic, get("mqtt_press_topic",cfg.mqtt_press_topic).c_str(), sizeof(cfg.mqtt_press_topic));
+    strlcpy(cfg.mqtt_status,      get("mqtt_status",     cfg.mqtt_status).c_str(),       sizeof(cfg.mqtt_status));
+    cfg.api_enabled  = server.hasArg("api_enabled");
+    cfg.api_https    = server.hasArg("api_https");
+    strlcpy(cfg.api_host,         get("api_host",  cfg.api_host).c_str(),  sizeof(cfg.api_host));
+    strlcpy(cfg.api_path,         get("api_path",  cfg.api_path).c_str(),  sizeof(cfg.api_path));
+    cfg.api_port     = get("api_port",   String(cfg.api_port).c_str()).toInt();
+    strlcpy(cfg.api_user,         get("api_user",  cfg.api_user).c_str(),  sizeof(cfg.api_user));
+    strlcpy(cfg.api_pass,         get("api_pass",  cfg.api_pass).c_str(),  sizeof(cfg.api_pass));
+    cfg.temp_corr    = get("temp_corr",  String(cfg.temp_corr).c_str()).toFloat();
+    cfg.elevation    = get("elevation",  String(cfg.elevation).c_str()).toInt();
+    cfg.sleep_min    = get("sleep_min",  String(cfg.sleep_min).c_str()).toInt();
+    if (cfg.sleep_min < 1) cfg.sleep_min = 1;
+
+    saveConfig();
+
+    server.send(200, "text/html",
+      "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+      "<meta http-equiv='refresh' content='3;url=/'></head><body>"
+      "<p style='font-family:sans-serif;margin:20px'>"
+      "&#10003; Gespeichert. Neustart in 3 Sekunden...</p></body></html>");
+
+    delay(1500);
+    ESP.restart();
+  });
+
+  server.begin();
+
+  // ---- Warten bis Timeout ----
+  unsigned long portalStart = millis();
+  Serial.print("Warte auf Konfiguration (");
+  Serial.print(CONFIG_TIMEOUT_S);
+  Serial.println("s Timeout)...");
+
+  while (millis() - portalStart < (unsigned long)CONFIG_TIMEOUT_S * 1000UL) {
+    server.handleClient();
+    yield();
+  }
+
+  Serial.println("Timeout – starte normal...");
+  server.stop();
+  WiFi.softAPdisconnect(true);
+  ESP.restart();
+}
+
 void setup() {
   Serial.begin(115200); while (!Serial); delay(200);
   Serial.println();
+
+  // Konfiguration aus EEPROM laden (oder Defaults verwenden)
+  loadConfig();
+
+  // Konfigurations-Portal prüfen: Button (CONFIG_BUTTON_PIN) beim Start LOW?
+  pinMode(CONFIG_BUTTON_PIN, INPUT_PULLUP);
+  delay(10);
+  if (digitalRead(CONFIG_BUTTON_PIN) == LOW) {
+    startConfigPortal();   // kehrt nicht zurück (Neustart am Ende)
+  }
+
   Serial.print("Start of ");
-  Serial.print(StationName);
+  Serial.print(cfg.station_name);
   Serial.print(", Version ");
   Serial.println(Version);
 
@@ -241,7 +577,7 @@ void setup() {
   Serial.print("Language: ");
   Serial.println(LANG_NAME);
 
-  client.setBufferSize(512);       // Increasing PubSubClient
+  client.setBufferSize(640);       // Increasing PubSubClient
 
   //******Battery Voltage Monitoring (first thing to do: is battery still ok?)***********
   // FIX v2.6: averaged over 16 ADC reads to reduce ESP8266 ADC noise.
@@ -270,8 +606,8 @@ void setup() {
   // **************Application going online**********************************************
 
   WiFi.mode(WIFI_STA);
-  WiFi.hostname(StationName); //This changes the hostname of the ESP8266 to display neatly on the network esp on router.
-  WiFi.begin(ssid, pass);
+  WiFi.hostname(cfg.station_name); // Hostname im Netzwerk anzeigen
+  WiFi.begin(cfg.wifi_ssid, cfg.wifi_pass);
   Serial.print("---> Connecting to WiFi ");
   int i = 0;
   while (WiFi.status() != WL_CONNECTED) {
@@ -284,7 +620,7 @@ void setup() {
         goToSleep(10);   // go to sleep and retry after 10 min
       }
       else {
-        goToSleep(0);   // hybernate because batt empty
+        goToSleep(0);   // Batterie leer: ESP.deepSleep(0) = permanenter Schlaf, Wake nur per Reset-Pin (RST→GND)
       }
     }
     Serial.print(".");
@@ -302,9 +638,9 @@ void setup() {
     }
   }
 
-  if (MQTT) connect_to_MQTT();  // connecting to MQTT broker
+  if (cfg.mqtt_enabled) connect_to_MQTT();  // connecting to MQTT broker
 
-  else {                        // Checking if SPIFFS available
+  else {
 
     Serial.println("SPIFFS Initialization: (First time run can last up to 30 sec - be patient)");
 
@@ -388,7 +724,7 @@ void setup() {
 
   measurementEvent();             // calling function to get all data from the different sensors
 
-  if (MQTT) ReadFromMQTT();       // reading timestamp, accuracy and pressure curve
+  if (cfg.mqtt_enabled) ReadFromMQTT();       // reading timestamp, accuracy and pressure curve
   else ReadFromSPIFFS();
 
   Serial.print("Timestamp difference: ");
@@ -409,7 +745,7 @@ void setup() {
       accuracy = accuracy + 1;
     }
 
-    if (MQTT) WriteToMQTT();
+    if (cfg.mqtt_enabled) WriteToMQTT();
     else WriteToSPIFFS(current_timestamp);
   }
 
@@ -458,7 +794,7 @@ void setup() {
   }
 
   // *********** code block for publishing all data to MQTT ****************************
-  if (MQTT) {
+  if (cfg.mqtt_enabled) {
     JsonDocument jsonDoc;
 
     jsonDoc["temperature"] = adjusted_temp;
@@ -479,21 +815,25 @@ void setup() {
     jsonDoc["wifi_strength"] = int(WiFi.RSSI());
     jsonDoc["timestamp"] = current_timestamp;
 
-    char jsonBuffer[512];
+    char jsonBuffer[640];
     serializeJson(jsonDoc, jsonBuffer);
 
     Serial.print("Data MQTT message: ");
     Serial.println(jsonBuffer);
 
-    client.publish(mqtt_topic, jsonBuffer, 1);   // , 1 = retained
+    client.publish(cfg.mqtt_topic, jsonBuffer, 1);   // , 1 = retained
     delay(50);
   }
 
+#if USE_API
+  if (cfg.api_enabled) sendToAPI();   // Messdaten zusätzlich an PHP/MySQL-API senden
+#endif
+
   if (volt > 3.4) {
-    goToSleep(sleepTimeMin);
+    goToSleep(cfg.sleep_min);
   }
   else {
-    goToSleep(0);
+    goToSleep(0);   // Batterie leer: ESP.deepSleep(0) = permanenter Schlaf, Wake nur per Reset-Pin (RST→GND)
   }
 } // end of void setup()
 
@@ -534,7 +874,7 @@ void measurementEvent() {
   sht4.setHeater(SHT4X_HIGH_HEATER_1S);
   sensors_event_t humidity_h, temp_h;
   sht4.getEvent(&humidity_h, &temp_h);   // triggers heated measurement (~1.1s)
-  delay(50);
+  delay(500);  // FIX: Membran braucht ≥500 ms um auf Umgebungstemperatur zurückzukehren; 50 ms waren zu kurz.
 
   // Now take the actual ambient measurement without heater
   sht4.setHeater(SHT4X_NO_HEATER);
@@ -571,7 +911,7 @@ void measurementEvent() {
   Serial.print(measured_pres);
   Serial.print("hPa; ");
 
-  SLpressure_hPa = (((measured_pres * 100.0) / pow((1 - ((float)(ELEVATION)) / 44330), 5.255)) / 100.0);
+  SLpressure_hPa = (((measured_pres * 100.0) / pow((1 - ((float)(cfg.elevation)) / 44330), 5.255)) / 100.0);
   rel_pressure_rounded = (int)(SLpressure_hPa + .5);
   Serial.print("Pressure rel: ");
   Serial.print(rel_pressure_rounded);
@@ -586,8 +926,8 @@ void measurementEvent() {
   Serial.print(DewpointTemperature);
   Serial.println("°C; ");
 
-  if (TEMP_CORR != 0) {
-    adjusted_temp = measured_temp + TEMP_CORR;
+  if (cfg.temp_corr != 0.0f) {
+    adjusted_temp = measured_temp + cfg.temp_corr;
     if (adjusted_temp < DewpointTemperature) adjusted_temp = DewpointTemperature; //compensation, if offset too high
     //August-Roche-Magnus approximation (http://bmcnoldy.rsmas.miami.edu/Humidity.html)
     adjusted_humi = 100 * (exp((a * DewpointTemperature) / (b + DewpointTemperature)) / exp((a * adjusted_temp) / (b + adjusted_temp)));
@@ -896,7 +1236,7 @@ void FirstTimeRun() {
   for (int b = 0; b < 12; b++) {
     pressure_value[b] = rel_pressure_rounded;               // Filling pressure array with current pressure
   }
-  if (MQTT) WriteToMQTT();
+  if (cfg.mqtt_enabled) WriteToMQTT();
   else {
     Serial.println("---> Starting SPIFFS initializing process.");
 
@@ -922,7 +1262,7 @@ void FirstTimeRun() {
 
 void connect_to_MQTT() {
   Serial.print("---> Connecting to MQTT");
-  client.setServer(mqtt_server, mqtt_port);
+  client.setServer(cfg.mqtt_server, cfg.mqtt_port);
   client.setCallback(callback);
 
   if (!client.connected()) {
@@ -941,15 +1281,15 @@ void reconnect() {
     clientId += String(random(0xffff), HEX);
     Serial.println(clientId.c_str());
 
-    if (client.connect(clientId.c_str(), mqtt_user, mqtt_pass)) {
+    if (client.connect(clientId.c_str(), cfg.mqtt_user, cfg.mqtt_pass)) {
       Serial.println("MQTT is connected");
       char tmp[128];
-      String statusmessage =  StationName + ", " + Version + ": client started";
+      String statusmessage =  String(cfg.station_name) + ", " + Version + ": client started";
       statusmessage.toCharArray(tmp, 128);
-      client.publish(mqtt_status, tmp);
+      client.publish(cfg.mqtt_status, tmp);
 
       // Subscribe to pressure topic
-      client.subscribe(mqtt_press_topic);
+      client.subscribe(cfg.mqtt_press_topic);
       delay(50);
       return;
     } else {
@@ -976,7 +1316,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
   Serial.println();
 
-  if (String(topic) == mqtt_press_topic) {
+  if (String(topic) == cfg.mqtt_press_topic) {
 
     JsonDocument inDoc;
 
@@ -1044,7 +1384,7 @@ void WriteToMQTT() {     // Write the pressure data to MQTT instead to SPIFFS (b
     pressureDoc["pressurecurve"][String(i)] = pressure_value[i];
   }
 
-  char p_buffer[512];
+  char p_buffer[640];
   serializeJson(pressureDoc, p_buffer);
 
   Serial.print("Outgoing pressure MQTT message: ");
@@ -1054,13 +1394,115 @@ void WriteToMQTT() {     // Write the pressure data to MQTT instead to SPIFFS (b
   delay(50);
 }
 
+// =====================================================================
+// Base64-Enkodierung (minimal, für HTTP Basic Auth)
+// Keine externe Bibliothek nötig – der ESP8266 Arduino Core enthält
+// keine stdlib-Base64, daher diese schlanke Inline-Implementierung.
+// =====================================================================
+static const char B64_CHARS[] =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+static String base64Encode(const String& input) {
+  String out;
+  out.reserve(((input.length() + 2) / 3) * 4);
+  int i = 0;
+  const int len = input.length();
+  while (i < len) {
+    uint8_t a = (i < len) ? (uint8_t)input[i++] : 0;
+    uint8_t b = (i < len) ? (uint8_t)input[i++] : 0;
+    uint8_t c = (i < len) ? (uint8_t)input[i++] : 0;
+    out += B64_CHARS[a >> 2];
+    out += B64_CHARS[((a & 3) << 4) | (b >> 4)];
+    out += (i - 2 < len) ? B64_CHARS[((b & 15) << 2) | (c >> 6)] : '=';
+    out += (i - 1 < len) ? B64_CHARS[c & 63] : '=';
+  }
+  return out;
+}
+
+// =====================================================================
+// sendToAPI() – sendet den aktuellen Messdatensatz per HTTP(S) POST
+//               an den konfigurierten REST-Endpunkt.
+//
+// Sicherheitshinweis: API_USE_HTTPS=1 verschlüsselt die Übertragung,
+// prüft aber kein Zertifikat (setInsecure). Das verhindert Lauschangriffe,
+// schützt aber nicht vor MITM. Für ein Wetterstation-Szenario ausreichend.
+// Wer Zertifikat-Pinning braucht: client.setFingerprint(SHA1_HEX) nutzen.
+// =====================================================================
+#if USE_API
+void sendToAPI() {
+  // JSON-Payload aufbauen (identisch mit MQTT-Payload)
+  JsonDocument jsonDoc;
+  jsonDoc["station_name"]    = cfg.station_name;
+  jsonDoc["temperature"]     = adjusted_temp;
+  jsonDoc["humidity"]        = adjusted_humi;
+  jsonDoc["dewpoint"]        = DewpointTemperature;
+  jsonDoc["dewpointspread"]  = DewPointSpread;
+  jsonDoc["relativepressure"]= rel_pressure_rounded;
+  jsonDoc["absolutepressure"]= measured_pres;
+  jsonDoc["pressurestate"]   = pressure_in_words();
+  jsonDoc["heatindex"]       = HeatIndex;
+  jsonDoc["zambrettisays"]   = ZambrettisWords;
+  jsonDoc["zletter"]         = String(z_letter);
+  jsonDoc["trendinwords"]    = trend_in_words();
+  jsonDoc["trend"]           = pressure_difference[11];
+  jsonDoc["accuracy"]        = (int)(accuracy * 94 / 12);
+  jsonDoc["battery"]         = volt;
+  jsonDoc["batterypercentage"]= batterypercentage;
+  jsonDoc["wifi_strength"]   = (int)WiFi.RSSI();
+  jsonDoc["timestamp"]       = current_timestamp;
+
+  char payload[640];
+  serializeJson(jsonDoc, payload);
+
+  // Basic-Auth-Header vorbereiten
+  String credentials = base64Encode(String(cfg.api_user) + ":" + String(cfg.api_pass));
+  String authHeader  = "Basic " + credentials;
+
+  // HTTP-Client aufbauen (Protokoll zur Laufzeit aus cfg.api_https)
+  HTTPClient http;
+  String url;
+
+  if (cfg.api_https) {
+    WiFiClientSecure tlsClient;
+    tlsClient.setInsecure();  // Zertifikat nicht prüfen (siehe Hinweis oben)
+    url = String("https://") + cfg.api_host + cfg.api_path;
+    http.begin(tlsClient, url);
+  } else {
+    WiFiClient plainClient;
+    url = String("http://") + cfg.api_host + cfg.api_path;
+    http.begin(plainClient, url);
+  }
+
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("Authorization", authHeader);
+  http.setTimeout(8000);  // 8 Sekunden Timeout
+
+  Serial.print("---> Sende Daten an API: ");
+  Serial.println(url);
+
+  int httpCode = http.POST(payload);
+
+  if (httpCode > 0) {
+    Serial.print("API Antwort HTTP ");
+    Serial.print(httpCode);
+    Serial.print(": ");
+    Serial.println(http.getString());
+  } else {
+    Serial.print("API Fehler: ");
+    Serial.println(http.errorToString(httpCode));
+  }
+
+  http.end();
+}
+#endif  // USE_API
+
 void goToSleep(unsigned int sleepmin) {
   // FIX v2.6: only publish status if MQTT is actually connected.
-  if (MQTT && client.connected()) {
+  if (cfg.mqtt_enabled && client.connected()) {
     char tmp[128];
-    String sleepmessage =  StationName + ", " + Version + ": Taking a nap for " + String (sleepmin) + " Minutes";
+    String sleepmessage =  String(cfg.station_name) + ", " + Version + ": Taking a nap for " + String(sleepmin) + " Minutes";
     sleepmessage.toCharArray(tmp, 128);
-    client.publish(mqtt_status, tmp);
+    client.publish(cfg.mqtt_status, tmp);
     delay(50);
 
     Serial.println("INFO: Closing the MQTT connection");

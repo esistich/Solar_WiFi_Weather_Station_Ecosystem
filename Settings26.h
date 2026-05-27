@@ -5,8 +5,23 @@
   Authors: Keith Hungerford, Debasish Dutta and Marc Stähli
   Website : www.opengreenenergy.com */
 
-const String StationName = "SWS_YourPlace";  // SolarWeatherStation (SWS)
-const String Version = "2.6";
+const String Version = "2.7";
+
+// =====================================================================
+// Compile-Zeit-Fallbacks für alle Laufzeit-Einstellungen
+// Diese Werte werden beim ersten Start (kein EEPROM) oder nach einem
+// "Werksreset" verwendet. Im laufenden Betrieb kommen die Werte aus
+// dem EEPROM (gesetzt über das Konfigurations-Portal).
+// =====================================================================
+
+/****** Konfigurations-Portal ************************************************/
+// GPIO-Pin für den Konfigurations-Knopf.
+// Wenn dieser Pin beim Aufwachen LOW ist, startet der ESP als Access Point
+// und öffnet ein Webinterface zur Konfiguration (IP: 192.168.4.1).
+// Standard: D3 = GPIO0. Taste zwischen D3 und GND anschließen.
+#define CONFIG_BUTTON_PIN   0       // GPIO0 = D3
+#define CONFIG_AP_SSID      "SWS-Config"   // WLAN-Name des Konfigurations-APs
+#define CONFIG_TIMEOUT_S    60      // Sekunden bis automatischer Neustart
 
 /******* Language Selection **************************************************
  * Choose the language by including the corresponding translation file.
@@ -58,29 +73,39 @@ const String App1 = "BLYNK";         // empty string if not applicable -> "" els
 #define BLYNK_AUTH_TOKEN "YOUR_TOKEN"
 //char auth[] = BLYNK_AUTH_TOKEN;
 
-/****** WiFi Settings ******************************************************/
+/****** WiFi Settings (Compile-Zeit-Fallbacks) *****************************/
 
-char ssid[] = "YOUR_SSID";                           // WiFi Router ssid
-char pass[] = "YOUR_PASSWORD";                       // WiFi Router password
+#define CFG_DEFAULT_STATION_NAME  "SWS_YourPlace"
+#define CFG_DEFAULT_WIFI_SSID     "YOUR_SSID"
+#define CFG_DEFAULT_WIFI_PASS     "YOUR_PASSWORD"
 
-/****** MQTT Settings ********************************************************/
+/****** MQTT Settings (Compile-Zeit-Fallbacks) *****************************/
 
-bool MQTT = true;                                    // If you use MQTT, set to true, else false (if true, SPIFFS is not used)
+#define CFG_DEFAULT_MQTT_ENABLED      true
+#define CFG_DEFAULT_MQTT_SERVER       "broker.hivemq.com"
+#define CFG_DEFAULT_MQTT_PORT         1883
+#define CFG_DEFAULT_MQTT_USER         ""
+#define CFG_DEFAULT_MQTT_PASS         ""
+#define CFG_DEFAULT_MQTT_TOPIC        "YOUR_TOPIC"
+#define CFG_DEFAULT_MQTT_PRESS_TOPIC  "YOUR_TOPIC/pressure"
+#define CFG_DEFAULT_MQTT_STATUS       "YOUR_TOPIC/status"
 
-const char* mqtt_server = "broker.hivemq.com";       // MQTT Server (broker) address
-const int mqtt_port = 1883;                          // MQTT Server Port
-const char* mqtt_user = "";                          // MQTT Server (broker) userid
-const char* mqtt_pass = "";                          // MQTT Server (broker) password
-const char* mqtt_topic = "YOUR_TOPIC";               // e.g. myname/weather/my_location
-const char* mqtt_press_topic = "YOUR_TOPIC";         // e.g. myname/weather/my_location/pressure
-const char* mqtt_status = "YOUR_STATUS";             // e.g. myname/status
+/****** REST-API Settings (Compile-Zeit-Fallbacks) **************************/
 
-/****** Additional Settings **************************************************/
+#define CFG_DEFAULT_API_ENABLED   false
+#define CFG_DEFAULT_API_HTTPS     true
+#define CFG_DEFAULT_API_HOST      "dein-server.de"
+#define CFG_DEFAULT_API_PATH      "/api/data.php"
+#define CFG_DEFAULT_API_PORT      443
+#define CFG_DEFAULT_API_USER      "YOUR_API_USER"
+#define CFG_DEFAULT_API_PASS      "YOUR_API_PASS"
 
-#define TEMP_CORR (0)                // Manual correction of temp sensor, humidity will automatically corrected with August-Roche-Magnus approximation
-#define ELEVATION (420)              // Enter your elevation in m ASL to calculate rel pressure (ASL/QNH) at your place
-#define sleepTimeMin (10)            // setting of deepsleep time in minutes (default: 10)
-#define NTP_SERVER "ch.pool.ntp.org" // NTP (reading UTC; local timezone does not matter, time is only needed for raising/falling pressure calcualtions)
+/****** Additional Settings (Compile-Zeit-Fallbacks) ************************/
+
+#define CFG_DEFAULT_TEMP_CORR     0.0f   // Manuelle Temperaturkorrektur in °C
+#define CFG_DEFAULT_ELEVATION     420    // Höhe über NN in Metern
+#define CFG_DEFAULT_SLEEP_MIN     10     // Deep-Sleep-Dauer in Minuten
+#define NTP_SERVER "ch.pool.ntp.org"     // Bleibt compile-time (EasyNTPClient-Init)
 
 // Temperature threshold (°C) for switching between summer (rain) and winter
 // (snow) precipitation words. Hysteresis prevents flapping near 2°C.
