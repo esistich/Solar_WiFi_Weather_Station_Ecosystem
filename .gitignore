@@ -1,0 +1,8 @@
+# Visual Studio
+.vs/
+
+# Arduino Build-Ordner
+build/
+*.bin
+*.elf
+*.map
