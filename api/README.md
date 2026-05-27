@@ -19,10 +19,12 @@ PHP/MySQL-API zur Speicherung und Abfrage der Messdaten der Solar WiFi Weather S
 
 ```
 api/
-├── auth.php        Credentials + requireBasicAuth() – zentrale Stelle
+├── auth.php        Credentials + requireBasicAuth() + sendCorsHeaders()
 ├── db.php          PDO-Datenbankverbindung (Singleton)
-├── data.php        GET letzter Messwert  /  POST neuer Datensatz
+├── data.php        GET letzter Messwert (inkl. data_age_s)  /  POST neuer Datensatz
 ├── history.php     GET Historienabfrage mit Filtern
+├── status.php      GET Health-Endpoint für Home Assistant (kein Auth)
+├── ha_sensors.yaml Fertige Home-Assistant-Konfiguration
 ├── schema.sql      Datenbank-Schema (einmalig importieren)
 └── README.md       Diese Datei
 ```
@@ -71,16 +73,25 @@ Alle Dateien aus `api/` in das entsprechende Verzeichnis auf dem Webserver hochl
 
 ### 5. Sketch konfigurieren (`Settings26.h`)
 
-```cpp
-#define USE_API       1                      // API-Upload aktivieren
-#define API_USE_HTTPS 1                      // HTTPS empfohlen
+Ab v2.7 werden alle Laufzeiteinstellungen als Compile-Zeit-Fallbacks definiert
+und können über das **AP-Konfigurations-Portal** (GPIO0 beim Boot gedrückt halten)
+jederzeit überschrieben werden:
 
-const char* api_host = "dein-server.de";    // Hostname (ohne https://)
-const char* api_path = "/api/data.php";     // Pfad zum Endpunkt
-const int   api_port = 443;                 // 443 = HTTPS, 80 = HTTP
-const char* api_user = "YOUR_API_USER";     // muss mit auth.php übereinstimmen
-const char* api_pass = "YOUR_API_PASS";     // muss mit auth.php übereinstimmen
+```cpp
+#define USE_API 1                          // API-Upload aktivieren
+
+// Compile-Zeit-Fallbacks (im Portal überschreibbar):
+#define CFG_DEFAULT_API_ENABLED   true
+#define CFG_DEFAULT_API_HTTPS     true
+#define CFG_DEFAULT_API_HOST      "dein-server.de"
+#define CFG_DEFAULT_API_PATH      "/api/data.php"
+#define CFG_DEFAULT_API_PORT      443
+#define CFG_DEFAULT_API_USER      "YOUR_API_USER"   // muss mit auth.php übereinstimmen
+#define CFG_DEFAULT_API_PASS      "YOUR_API_PASS"   // muss mit auth.php übereinstimmen
 ```
+
+> HTTPS wird empfohlen. Das Zertifikat wird nicht geprüft (`setInsecure()`), die
+> Übertragung ist aber verschlüsselt.
 
 ---
 
