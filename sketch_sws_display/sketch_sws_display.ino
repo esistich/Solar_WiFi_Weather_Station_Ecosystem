@@ -272,7 +272,6 @@ input[type=checkbox]{width:18px;height:18px}
 static void buildScrollText(const JsonDocument& doc, char* out, size_t outLen) {
     char tmp[16];
 
-    const char* station   = doc["station_name"]      | "SWS";
     float  temp           = doc["temperature"]        | 0.0f;
     float  pool           = doc["pool_temperature"]   | -99.0f;
     float  hum            = doc["humidity"]           | 0.0f;
@@ -282,8 +281,7 @@ static void buildScrollText(const JsonDocument& doc, char* out, size_t outLen) {
 
     out[0] = '\0';
 
-    strncat(out, station, outLen - strlen(out) - 1);
-    strncat(out, "  |  T:", outLen - strlen(out) - 1);
+    strncat(out, "T:", outLen - strlen(out) - 1);
     dtostrf(temp, 1, 1, tmp);
     strncat(out, tmp, outLen - strlen(out) - 1);
     strncat(out, "\xB0""C  ", outLen - strlen(out) - 1);
