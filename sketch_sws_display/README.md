@@ -5,6 +5,36 @@ Lauftext auf 4 kaskadierten 8×8-LED-Matrizen (1088AS / MAX7219) an.
 
 ---
 
+## Erstkonfiguration – Config-Portal
+
+Beim ersten Start sind noch keine WLAN-Zugangsdaten hinterlegt.  
+Alle Einstellungen werden im EEPROM gespeichert und können jederzeit geändert werden.
+
+### Config-Modus aktivieren
+
+1. **D3/BOOT-Taster beim Einschalten gedrückt halten** (oder beim ersten Start ohne WLAN-Config automatisch)
+2. Das Display zeigt `Config...`
+3. Mit dem Smartphone/PC mit dem WLAN **`SWS-Display-Config`** verbinden (kein Passwort)
+4. Browser öffnen: **http://192.168.4.1**
+5. Formular ausfüllen → **Speichern & Neustart**
+
+### Konfigurierbare Felder
+
+| Feld | Beschreibung | Standard |
+|------|-------------|---------|
+| SSID | WLAN-Name | *(leer)* |
+| Passwort | WLAN-Passwort | *(leer)* |
+| API Host | Hostname der API | `timm-sander.net` |
+| API Pfad | Pfad zum Endpoint | `/swsapi/data.php` |
+| HTTPS | Verschlüsselte Verbindung | ✓ |
+| Intervall | Sekunden zwischen Abrufen | `60` |
+| Helligkeit | 0 (dunkel) bis 15 (max.) | `5` |
+| Scroll-Geschw. | ms pro Schritt | `40` |
+
+> Die Compile-Zeit-Defaults in `DisplaySettings.h` dienen nur als Fallback falls das EEPROM leer ist.
+
+---
+
 ## Hardware
 
 | Komponente | Details |
