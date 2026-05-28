@@ -38,8 +38,8 @@ const String Version = "2.7";
  * and change the include below.
  ****************************************************************************/
 
-#include "Translation_DE.h"
-// #include "Translation_EN.h"
+#include "Translations/Translation_DE.h"
+// #include "Translations/Translation_EN.h"
 
 /******* Sensor Configuration ************************************************
  * Choose which sensors are physically connected. The BME280 is required as
