@@ -1371,10 +1371,15 @@ float getTemperature() {
   delay(750);   // 12-bit conversion time per Maxim datasheet
   float t = s18d20.getTempCByIndex(0);
 
-  if (t > -127 && t < 85) {
+  Serial.print("DS18B20 Rohwert: ");
+  Serial.print(t);
+  Serial.println("°C");
+
+  if (t > -126.9 && t < 84.9) {   // -127 = kein Sensor, 85 = Kurzschluss/Fehler
     return t;
   }
   else {
+    Serial.println("DS18B20 Fehler: Sensor nicht gefunden oder Kurzschluss! Prüfe Verkabelung und 4.7kΩ Pull-up auf D7.");
     return -88;
   }
 }
@@ -1441,7 +1446,13 @@ void sendToAPI() {
   JsonDocument jsonDoc;
   jsonDoc["station_name"]    = cfg.station_name;
   jsonDoc["temperature"]      = adjusted_temp;          // BME280 Umgebungstemperatur
-  if (pool_temp > -87) jsonDoc["pool_temperature"] = pool_temp;  // DS18B20 Pooltemperatur (nur wenn Sensor vorhanden)
+  if (pool_temp > -87) {
+    jsonDoc["pool_temperature"] = pool_temp;
+    Serial.print("API: pool_temperature = ");
+    Serial.println(pool_temp);
+  } else {
+    Serial.println("API: pool_temperature fehlt (Sensor-Fehler oder nicht angeschlossen)");
+  }
   jsonDoc["humidity"]         = adjusted_humi;
   jsonDoc["dewpoint"]         = DewpointTemperature;
   jsonDoc["dewpointspread"]   = DewPointSpread;
