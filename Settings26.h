@@ -88,6 +88,7 @@ const String Version = "2.7";
 #define CFG_DEFAULT_MQTT_STATUS       "YOUR_TOPIC/status"
 
 /****** REST-API Settings (Compile-Zeit-Fallbacks) **************************/
+#define USE_API 1                         // REST-API-Upload aktivieren
 
 #define CFG_DEFAULT_API_ENABLED   true
 #define CFG_DEFAULT_API_HTTPS     true
