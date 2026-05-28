@@ -55,6 +55,7 @@ if ($method === 'GET') {
 		// Numerische Felder casten
 		$row['id']               = (int)   $row['id'];
 		$row['temperature']      = (float) $row['temperature'];
+		$row['pool_temperature'] = isset($row['pool_temperature']) ? (float) $row['pool_temperature'] : null;
 		$row['humidity']         = (float) $row['humidity'];
 		$row['heat_index']       = (float) $row['heat_index'];
 		$row['dewpoint']         = (float) $row['dewpoint'];
@@ -105,14 +106,14 @@ if ($method === 'POST') {
 		$pdo  = getDb();
 		$stmt = $pdo->prepare('
 			INSERT INTO measurements (
-				station_name, temperature, humidity, heat_index,
+				station_name, temperature, pool_temperature, humidity, heat_index,
 				dewpoint, dewpoint_spread,
 				abs_pressure, rel_pressure, pressure_state,
 				zambretti, zambretti_letter, trend, trend_value, accuracy,
 				battery_volt, battery_pct,
 				wifi_strength, device_timestamp
 			) VALUES (
-				:station_name, :temperature, :humidity, :heat_index,
+				:station_name, :temperature, :pool_temperature, :humidity, :heat_index,
 				:dewpoint, :dewpoint_spread,
 				:abs_pressure, :rel_pressure, :pressure_state,
 				:zambretti, :zambretti_letter, :trend, :trend_value, :accuracy,
@@ -124,6 +125,7 @@ if ($method === 'POST') {
 		$stmt->execute([
 			':station_name'     => substr((string)($d['station_name']    ?? ''), 0, 64),
 			':temperature'      => (float)($d['temperature']             ?? 0),
+			':pool_temperature' => array_key_exists('pool_temperature', $d) ? (float)$d['pool_temperature'] : null,
 			':humidity'         => (float)($d['humidity']                ?? 0),
 			':heat_index'       => (float)($d['heatindex']               ?? 0),
 			':dewpoint'         => (float)($d['dewpoint']                ?? 0),

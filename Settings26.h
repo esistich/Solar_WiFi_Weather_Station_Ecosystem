@@ -18,10 +18,15 @@ const String Version = "2.7";
 // GPIO-Pin für den Konfigurations-Knopf.
 // Wenn dieser Pin beim Aufwachen LOW ist, startet der ESP als Access Point
 // und öffnet ein Webinterface zur Konfiguration (IP: 192.168.4.1).
-// Standard: D3 = GPIO0. Taste zwischen D3 und GND anschließen.
-#define CONFIG_BUTTON_PIN   0       // GPIO0 = D3
+// WICHTIG: GPIO0 (D3) NICHT verwenden – dieser Pin ist ein Boot-Strapping-Pin!
+//          GPIO0=LOW beim Reset = ESP bootet in den Flash-Bootloader, nicht in den Sketch.
+// Standard: D6 = GPIO12. Taste zwischen D6 und GND anschließen.
+#define CONFIG_BUTTON_PIN   12      // GPIO12 = D6  (boot-neutral)
 #define CONFIG_AP_SSID      "SWS-Config"   // WLAN-Name des Konfigurations-APs
-#define CONFIG_TIMEOUT_S    60      // Sekunden bis automatischer Neustart
+// Status-LED für Konfigurations-Portal.
+// Externe LED an D5 (GPIO14) mit Vorwiderstand ~220 Ohm gegen GND.
+#define CONFIG_LED_PIN      14      // GPIO14 = D5 (externe LED)
+#define CONFIG_LED_ACTIVE   HIGH    // HIGH = LED an 3V3/Vorwiderstand gegen GND
 
 /******* Language Selection **************************************************
  * Choose the language by including the corresponding translation file.
@@ -64,14 +69,6 @@ const String Version = "2.7";
 
 #define TEMP_SOURCE    SRC_DAL    // recommended outdoor: Dallas (better thermal buffering in sun)
 #define HUMI_SOURCE    SRC_SHT    // recommended outdoor: SHT45 (PTFE membrane, integrated heater)
-
-/******* configuration control constant for use of Blynk and/or Thingspeak **/
-
-const String App1 = "BLYNK";         // empty string if not applicable -> "" else "BLYNK"
-#define BLYNK_TEMPLATE_ID "YOUR_ID"
-#define BLYNK_TEMPLATE_NAME "Solar Weather Station"
-#define BLYNK_AUTH_TOKEN "YOUR_TOKEN"
-//char auth[] = BLYNK_AUTH_TOKEN;
 
 /****** WiFi Settings (Compile-Zeit-Fallbacks) *****************************/
 

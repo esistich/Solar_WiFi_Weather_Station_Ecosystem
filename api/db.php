@@ -16,9 +16,9 @@
  */
 
 define('DB_HOST', 'localhost');
-define('DB_NAME', 'solarweather');
-define('DB_USER', 'YOUR_DB_USER');
-define('DB_PASS', 'YOUR_DB_PASS');
+define('DB_NAME', 'cla2lhsne_timm_sander_netsite');
+define('DB_USER', 'cla2lhsne_timm_sander_netsite');
+define('DB_PASS', 'zayzsNTSdlXbkrlL4Z1d');
 define('DB_CHARSET', 'utf8mb4');
 
 /**

@@ -95,6 +95,58 @@ jederzeit überschrieben werden:
 
 ---
 
+## Konfigurations-Portal (v2.7)
+
+Ab v2.7 startet der Sketch beim Booten ein **WLAN-Accesspoint-Portal**, wenn der Konfigurations-Button gedrückt gehalten wird.
+
+### Bedienung
+
+1. **Button gedrückt halten** (D3 / GPIO0 gegen GND) und gleichzeitig **Reset** drücken (oder Spannung anlegen).
+2. Der ESP8266 öffnet den WLAN-Accesspoint **`SWS-Config`** (kein Passwort).
+3. Mit einem Smartphone oder PC mit diesem WLAN verbinden.
+4. Browser öffnen → **`http://192.168.4.1`**
+5. Alle Einstellungen konfigurieren und speichern – der ESP startet danach automatisch neu.
+
+> Das Portal schließt sich nach **60 Sekunden** ohne Aktion automatisch und der normale Messbetrieb beginnt.
+>
+> Die **Status-LED (D4)** blinkt während das Portal aktiv ist (0,5 s-Takt). Nach dem Speichern blinkt sie schnell (6×) als Bestätigung.
+
+### Im Portal konfigurierbare Einstellungen
+
+| Einstellung | Beschreibung |
+|---|---|
+| WLAN SSID / Passwort | Heimnetzwerk für den Datentransfer |
+| MQTT Host / Port / Topic / User / Pass | MQTT-Broker-Verbindung |
+| API Host / Path / Port / User / Pass | PHP-API-Endpunkt |
+| API HTTPS | TLS-Verbindung aktivieren/deaktivieren |
+| Temperaturkorrektur | Offset in °C (Kompensation für Eigenerwärmung) |
+| Elevation | Standorthöhe in Metern (für rel. Luftdruckberechnung) |
+| Sleep-Intervall | Deep-Sleep-Zeit in Minuten |
+
+---
+
+## Pin-Plan – WEMOS D1 Mini Pro
+
+| WEMOS-Pin | GPIO | Funktion | Sensor / Bauteil |
+|---|---|---|---|
+| **3V3** | – | Versorgung 3,3 V | BME280, SHT45 |
+| **GND** | – | Masse | alle Sensoren |
+| **D1** | GPIO5 | I²C SCL | BME280, SHT45 |
+| **D2** | GPIO4 | I²C SDA | BME280, SHT45 |
+| **D3** | GPIO0 | ⚠️ Boot-Strapping-Pin – **nicht als Button verwenden!** | – |
+| **D4** | GPIO2 | Onboard-LED (nicht belegt für Portal) | – |
+| **D5** | GPIO14 | Status-LED Konfigurations-Portal (externe LED, aktiv-HIGH) | LED + ~220 Ω gegen GND |
+| **D6** | GPIO12 | Konfigurations-Button (gegen GND) | Taster |
+| **D7** | GPIO13 | 1-Wire Data | DS18B20 (Poolsensor) |
+| **A0** | ADC | Batteriespannung (Spannungsteiler) | Batteriemessung |
+
+> **DS18B20:** 4,7 kΩ Pull-up-Widerstand zwischen Data (D7) und 3V3 erforderlich.  
+> **BME280-Adresse:** `0x76` (SDO → GND) oder `0x77` (SDO → 3V3).  
+> **Konfigurations-Button:** einfacher Taster zwischen **D6** und GND. GPIO0 (D3) **nicht** verwenden – LOW beim Reset aktiviert den ESP8266-Flash-Bootloader.  
+> **Status-LED:** externe LED an **D5**, Vorwiderstand ~220 Ω gegen GND (aktiv-HIGH).
+
+---
+
 ## Sicherheit
 
 ### HTTP Basic Auth
@@ -131,6 +183,7 @@ curl https://timm-sander.net/swsapi/data.php
   "created_at": "2025-06-15 14:30:00",
   "station_name": "SWS_MyPlace",
   "temperature": 21.5,
+  "pool_temperature": 28.3,
   "humidity": 58.3,
   "heat_index": 21.5,
   "dewpoint": 12.8,
@@ -173,7 +226,7 @@ curl -u station:passwort \
 | `relativepressure` | int | Relativer Luftdruck (QNH) in hPa |
 | `battery` | float | Batteriespannung in V |
 
-**Optionale Felder:** `station_name`, `heatindex`, `dewpoint`, `dewpointspread`, `pressurestate`, `zambrettisays`, `zletter`, `trendinwords`, `trend`, `accuracy`, `batterypercentage`, `wifi_strength`, `timestamp`
+**Optionale Felder:** `station_name`, `pool_temperature`, `heatindex`, `dewpoint`, `dewpointspread`, `pressurestate`, `zambrettisays`, `zletter`, `trendinwords`, `trend`, `accuracy`, `batterypercentage`, `wifi_strength`, `timestamp`
 
 **Response `201 Created`:**
 ```json
@@ -339,6 +392,8 @@ Sekunden seit der letzten Messung – nützlich für HA-Templates und Watchdog-A
 
 | Version | Datum | Änderung |
 |---|---|---|
+| 1.5 | 2025-06 | Blynk-Unterstützung vollständig entfernt; Konfig-Portal läuft jetzt ohne Zeitlimit (Neustart nur per Speichern oder Hardware-Reset) |
+| 1.4 | 2025-06 | DS18B20 als Poolsensor: neues Feld `pool_temperature` |
 | 1.3 | 2025-06 | Home-Assistant-Integration: `status.php` (Health-Endpoint), CORS-Header in allen Endpunkten, `data_age_s` in `data.php`, `ha_sensors.yaml` mit REST-Sensoren, Template-Sensoren und Automationen |
 | 1.2 | 2025-06 | Konfigurations-Portal per Button: alle Laufzeit-Einstellungen (WiFi, MQTT, API, Elevation …) über Browser konfigurierbar und im EEPROM gespeichert |
 | 1.1 | 2025-06 | `history.php` hinzugefügt (GET mit `limit`, `from`, `to`); gemeinsame `auth.php` für zentrale Credentials |

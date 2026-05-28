@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS `measurements` (
   `station_name`        VARCHAR(64)      NOT NULL DEFAULT '',
 
   -- Temperatur & Feuchte
-  `temperature`         DECIMAL(5,2)     NOT NULL COMMENT 'Temperatur in °C (korrigiert)',
+  `temperature`         DECIMAL(5,2)     NOT NULL COMMENT 'Umgebungstemperatur BME280 in °C (korrigiert)',
+  `pool_temperature`    DECIMAL(5,2)         NULL COMMENT 'Pooltemperatur DS18B20 in °C (NULL wenn kein Sensor)',
   `humidity`            DECIMAL(5,2)     NOT NULL COMMENT 'Relative Luftfeuchte in %',
   `heat_index`          DECIMAL(5,2)     NOT NULL COMMENT 'Hitzeindex in °C',
   `dewpoint`            DECIMAL(5,2)     NOT NULL COMMENT 'Taupunkt in °C',
@@ -43,3 +44,8 @@ CREATE TABLE IF NOT EXISTS `measurements` (
   PRIMARY KEY (`id`),
   KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Migration für bestehende Installationen (einmalig ausführen):
+-- ALTER TABLE `measurements` ADD COLUMN `pool_temperature` DECIMAL(5,2) NULL
+--   COMMENT 'Pooltemperatur DS18B20 in °C (NULL wenn kein Sensor)'
+--   AFTER `temperature`;

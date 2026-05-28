@@ -35,6 +35,7 @@ sensor:
     device_class: temperature
     json_attributes:
       - humidity
+      - pool_temperature
       - rel_pressure
       - abs_pressure
       - dewpoint
@@ -101,6 +102,16 @@ template:
         state_class: measurement
         state: >
           {{ state_attr('sensor.sws_wetterstation', 'dewpoint') | float | round(1) }}
+
+      - name: "SWS Pooltemperatur"
+        unique_id: sws_pool_temperature
+        unit_of_measurement: "°C"
+        device_class: temperature
+        icon: mdi:pool-thermometer
+        state_class: measurement
+        state: >
+          {% set v = state_attr('sensor.sws_wetterstation', 'pool_temperature') %}
+          {{ v | float | round(1) if v is not none else 'unknown' }}
 
       - name: "SWS Taupunktabstand"
         unique_id: sws_dewpoint_spread

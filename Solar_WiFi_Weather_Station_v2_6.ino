@@ -143,7 +143,6 @@
 #include <ESP8266WebServer.h>       // Konfigurations-Portal
 #include <EEPROM.h>                 // Persistente Einstellungen
 #include <ArduinoJson.h>
-#include <BlynkSimpleEsp8266.h>     // https://github.com/blynkkk/blynk-library
 #include <WiFiUdp.h>
 #include "FS.h"
 #include <EasyNTPClient.h>          // https://github.com/aharshac/EasyNTPClient
@@ -335,6 +334,7 @@ float adjusted_temp;
 float measured_humi;
 float measured_humi_bme;
 float adjusted_humi;
+float pool_temp = -88;  // DS18B20 Pooltemperatur (-88 = kein Sensor / Fehler)
 float measured_pres;
 float SLpressure_hPa;               // needed for rel pressure calculation
 float HeatIndex;                    // Heat Index in °C
@@ -387,16 +387,30 @@ PubSubClient client(espClient);     // MQTT
 // Gestartet wenn CONFIG_BUTTON_PIN beim Aufwachen LOW ist.
 // Der ESP öffnet einen Access Point (SSID: SWS-Config) und stellt
 // unter http://192.168.4.1 ein HTML-Formular bereit.
-// Nach dem Speichern oder nach CONFIG_TIMEOUT_S Sekunden: Neustart.
+// Nach dem Speichern startet der ESP automatisch neu (kein Timeout).
 // =====================================================================
 void startConfigPortal() {
   Serial.println("\n*** Konfigurations-Portal gestartet ***");
   Serial.print("WLAN-Name: "); Serial.println(CONFIG_AP_SSID);
   Serial.println("IP: 192.168.4.1");
 
+  // WLAN sauber in AP-Modus bringen
+  WiFi.persistent(false);   // verhindert, dass softAP-Credentials im Flash gespeichert werden
+  WiFi.disconnect();        // bestehende STA-Verbindung trennen (ohne Modem-Reset)
+  delay(100);
   WiFi.mode(WIFI_AP);
-  WiFi.softAP(CONFIG_AP_SSID);
-  delay(500);
+  delay(100);
+  bool apOk = WiFi.softAP(CONFIG_AP_SSID);   // kein Passwort = offener AP
+  delay(500);   // AP braucht ~300–500 ms bis er sichtbar ist
+
+  if (!apOk) {
+    Serial.println("FEHLER: softAP() fehlgeschlagen! Neustart...");
+    delay(1000);
+    ESP.restart();
+  }
+
+  Serial.print("AP IP: ");
+  Serial.println(WiFi.softAPIP());
 
   ESP8266WebServer server(80);
 
@@ -475,9 +489,7 @@ void startConfigPortal() {
 
     html += R"(</table>
 <button class='btn' type='submit'>Speichern &amp; Neustart</button>
-<p class='note'>Das Portal schlie&szlig;t sich automatisch nach )"
-          + String(CONFIG_TIMEOUT_S) +
-          R"( Sekunden.</p>
+<p class='note'>Nach dem Speichern startet die Station automatisch neu.</p>
 </form></body></html>)";
 
     server.send(200, "text/html", html);
@@ -520,27 +532,37 @@ void startConfigPortal() {
       "<p style='font-family:sans-serif;margin:20px'>"
       "&#10003; Gespeichert. Neustart in 3 Sekunden...</p></body></html>");
 
-    delay(1500);
+    // Schnelles Blinken als Speicher-Bestätigung
+    for (int i = 0; i < 6; i++) {
+      digitalWrite(CONFIG_LED_PIN, CONFIG_LED_ACTIVE);
+      delay(100);
+      digitalWrite(CONFIG_LED_PIN, !CONFIG_LED_ACTIVE);
+      delay(100);
+    }
+    digitalWrite(CONFIG_LED_PIN, !CONFIG_LED_ACTIVE);
+    delay(500);
     ESP.restart();
   });
 
   server.begin();
 
-  // ---- Warten bis Timeout ----
-  unsigned long portalStart = millis();
-  Serial.print("Warte auf Konfiguration (");
-  Serial.print(CONFIG_TIMEOUT_S);
-  Serial.println("s Timeout)...");
+  // LED blinkt: Konfigurations-Portal aktiv
+  unsigned long lastBlink = millis();
+  bool ledState           = true;
+  Serial.println("Warte auf Konfiguration (kein Timeout – Neustart erfolgt nach dem Speichern)...");
 
-  while (millis() - portalStart < (unsigned long)CONFIG_TIMEOUT_S * 1000UL) {
+  while (true) {
     server.handleClient();
+    // LED alle 500 ms blinken lassen
+    if (millis() - lastBlink >= 500) {
+      lastBlink = millis();
+      ledState  = !ledState;
+      digitalWrite(CONFIG_LED_PIN, ledState ? CONFIG_LED_ACTIVE : !CONFIG_LED_ACTIVE);
+    }
     yield();
   }
-
-  Serial.println("Timeout – starte normal...");
-  server.stop();
-  WiFi.softAPdisconnect(true);
-  ESP.restart();
+  // Kein Timeout: Das Portal läuft bis der Nutzer speichert (/save → ESP.restart())
+  // oder einen Hardware-Reset auslöst.
 }
 
 void setup() {
@@ -554,6 +576,8 @@ void setup() {
 
   // Konfigurations-Portal prüfen: Button (CONFIG_BUTTON_PIN) beim Start LOW?
   pinMode(CONFIG_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(CONFIG_LED_PIN, OUTPUT);
+  digitalWrite(CONFIG_LED_PIN, !CONFIG_LED_ACTIVE);  // LED im Normalbetrieb aus
   delay(10);
   if (digitalRead(CONFIG_BUTTON_PIN) == LOW) {
     startConfigPortal();   // kehrt nicht zurück (Neustart am Ende)
@@ -636,17 +660,6 @@ void setup() {
     Serial.print(".");
   }
   Serial.println(" Wifi connected ok");
-
-  if (App1 == "BLYNK") {        // for posting data to Blynk App
-    Blynk.config(BLYNK_AUTH_TOKEN);
-    Serial.print("---> Connecting to Blynk ");
-    bool blynk_ok = Blynk.connect(5000);  // 5 second timeout, non-blocking
-    if (blynk_ok) {
-      Serial.println("Blynk connected ok");
-    } else {
-      Serial.println("Blynk connection failed - continuing without Blynk");
-    }
-  }
 
   if (cfg.mqtt_enabled) connect_to_MQTT();  // connecting to MQTT broker
 
@@ -785,29 +798,12 @@ void setup() {
   }
   Serial.println("********************************************************");
 
-  // ************ code block for uploading data to BLYNK App ***************
-
-  if (App1 == "BLYNK" && Blynk.connected()) {
-    Blynk.virtualWrite(V0, adjusted_temp);
-    Blynk.virtualWrite(V1, adjusted_humi);
-    Blynk.virtualWrite(V2, measured_pres);
-    Blynk.virtualWrite(V3, rel_pressure_rounded);
-    Blynk.virtualWrite(V4, volt);
-    Blynk.virtualWrite(V5, DewpointTemperature);
-    Blynk.virtualWrite(V6, HeatIndex);
-    Blynk.virtualWrite(V7, ZambrettisWords);
-    Blynk.virtualWrite(V8, accuracy_in_percent);
-    Blynk.virtualWrite(V9, trend_in_words());
-    Blynk.virtualWrite(V10, DewPointSpread);
-    Blynk.virtualWrite(V11, pressure_in_words());
-    Serial.println("Data written to Blynk ...");
-  }
-
   // *********** code block for publishing all data to MQTT ****************************
   if (cfg.mqtt_enabled) {
     JsonDocument jsonDoc;
 
-    jsonDoc["temperature"] = adjusted_temp;
+    jsonDoc["temperature"] = adjusted_temp;         // BME280 Umgebungstemperatur
+    if (pool_temp > -87) jsonDoc["pool_temperature"] = pool_temp;  // DS18B20 Pooltemperatur (nur wenn Sensor vorhanden)
     jsonDoc["humidity"] = adjusted_humi;
     jsonDoc["dewpoint"] = DewpointTemperature;
     jsonDoc["relativepressure"] = rel_pressure_rounded;
@@ -868,10 +864,11 @@ void measurementEvent() {
   Serial.println("%; ");
 
 #if USE_DS18B20
-  // ----- DS18B20 -----
+  // ----- DS18B20 als Poolsensor -----
   measured_temp_dal = getTemperature();
-  Serial.print("Temp Dallas: ");
-  Serial.print(measured_temp_dal);
+  pool_temp = measured_temp_dal;  // Pooltemperatur separat speichern
+  Serial.print("Pool-Temp (DS18B20): ");
+  Serial.print(pool_temp);
   Serial.println("°C; ");
 #endif
 
@@ -1443,10 +1440,11 @@ void sendToAPI() {
   // JSON-Payload aufbauen (identisch mit MQTT-Payload)
   JsonDocument jsonDoc;
   jsonDoc["station_name"]    = cfg.station_name;
-  jsonDoc["temperature"]     = adjusted_temp;
-  jsonDoc["humidity"]        = adjusted_humi;
-  jsonDoc["dewpoint"]        = DewpointTemperature;
-  jsonDoc["dewpointspread"]  = DewPointSpread;
+  jsonDoc["temperature"]      = adjusted_temp;          // BME280 Umgebungstemperatur
+  if (pool_temp > -87) jsonDoc["pool_temperature"] = pool_temp;  // DS18B20 Pooltemperatur (nur wenn Sensor vorhanden)
+  jsonDoc["humidity"]         = adjusted_humi;
+  jsonDoc["dewpoint"]         = DewpointTemperature;
+  jsonDoc["dewpointspread"]   = DewPointSpread;
   jsonDoc["relativepressure"]= rel_pressure_rounded;
   jsonDoc["absolutepressure"]= measured_pres;
   jsonDoc["pressurestate"]   = pressure_in_words();

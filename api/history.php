@@ -101,6 +101,7 @@ try {
 	foreach ($rows as &$row) {
 		$row['id']               = (int)   $row['id'];
 		$row['temperature']      = (float) $row['temperature'];
+		$row['pool_temperature'] = isset($row['pool_temperature']) ? (float) $row['pool_temperature'] : null;
 		$row['humidity']         = (float) $row['humidity'];
 		$row['heat_index']       = (float) $row['heat_index'];
 		$row['dewpoint']         = (float) $row['dewpoint'];
