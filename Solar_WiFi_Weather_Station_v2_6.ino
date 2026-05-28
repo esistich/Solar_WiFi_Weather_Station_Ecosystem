@@ -835,7 +835,10 @@ void setup() {
   if (cfg.api_enabled) sendToAPI();   // Messdaten zusätzlich an PHP/MySQL-API senden
 #endif
 
-  if (volt > 3.4) {
+  if (volt < 0.5) {
+    Serial.println("Kein Akku erkannt (USB-Betrieb) – normaler Schlaf.");
+    goToSleep(cfg.sleep_min);
+  } else if (volt > 3.4) {
     goToSleep(cfg.sleep_min);
   }
   else {
