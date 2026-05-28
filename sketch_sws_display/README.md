@@ -28,7 +28,8 @@ Alle Einstellungen werden im EEPROM gespeichert und können jederzeit geändert 
 | API Pfad | Pfad zum Endpoint | `/swsapi/data.php` |
 | HTTPS | Verschlüsselte Verbindung | ✓ |
 | Intervall | Sekunden zwischen Abrufen | `60` |
-| Helligkeit | 0 (dunkel) bis 15 (max.) | `5` |
+| Helligkeit min | Intensity bei Dunkelheit (0–15) | `1` |
+| Helligkeit max | Intensity bei hellem Licht (0–15) | `12` |
 | Scroll-Geschw. | ms pro Schritt | `40` |
 
 > Die Compile-Zeit-Defaults in `DisplaySettings.h` dienen nur als Fallback falls das EEPROM leer ist.
@@ -53,7 +54,15 @@ GND             ──── GND
 D5  (GPIO14)    ──── CLK
 D7  (GPIO13)    ──── DIN
 D8  (GPIO15)    ──── CS
+
+WEMOS D1 Mini Pro    LDR-Schaltung
+─────────────────    ──────────────
+3V3             ──── LDR (eine Seite)
+A0              ──── LDR (andere Seite) + 10kΩ gegen GND
+GND             ──── 10kΩ (Gegenseite)
 ```
+
+> Der WEMOS D1 Mini Pro hat einen eingebauten 220kΩ-Spannungsteiler auf A0 für 3,3 V-Eingang. Den 10kΩ-Widerstand trotzdem verbauen (Spannungsteiler mit dem LDR).
 
 > Beim Kaskadieren: DOUT des ersten Moduls → DIN des zweiten usw.  
 > VCC je nach Modul-Spezifikation: die meisten 1088AS-Module vertragen 3,3 V und 5 V.

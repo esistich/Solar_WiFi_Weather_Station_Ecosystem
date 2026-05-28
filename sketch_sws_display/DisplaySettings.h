@@ -29,5 +29,14 @@
 #define DISPLAY_CS_PIN      15            // D8 (GPIO15) – Chip-Select
 #define NUM_DEVICES          4            // Anzahl kaskadierter 8×8-Module
 
-#define CFG_DEFAULT_INTENSITY   5         // Helligkeit 0–15
-#define CFG_DEFAULT_SCROLL_MS  40         // ms pro Scroll-Schritt
+// ------ LDR (Helligkeitssensor) ----------------------------
+// WEMOS D1 Mini: einziger Analog-Eingang A0 (0–1023)
+#define LDR_PIN             A0
+#define LDR_UPDATE_MS       2000UL        // Helligkeit alle 2 s aktualisieren
+
+// Automatische Helligkeit: LDR-Rohwert → Intensity-Bereich
+// Min-/Max-Werte im Config-Portal anpassbar
+#define CFG_DEFAULT_INTENSITY_MIN   1     // Helligkeit bei Dunkelheit (0–15)
+#define CFG_DEFAULT_INTENSITY_MAX  12     // Helligkeit bei hellem Licht (0–15)
+
+#define CFG_DEFAULT_SCROLL_MS      40     // ms pro Scroll-Schritt

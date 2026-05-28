@@ -54,7 +54,8 @@ struct DisplayConfig {
     char  api_path[64];
     bool  api_https;
     int   fetch_sec;
-    int   intensity;
+    int   intensity_min;   // LDR-Dunkel-Grenze (0–15)
+    int   intensity_max;   // LDR-Hell-Grenze  (0–15)
     int   scroll_ms;
 };
 
@@ -81,9 +82,10 @@ static void applyDefaults() {
     strlcpy(cfg.api_host,   CFG_DEFAULT_API_HOST,   sizeof(cfg.api_host));
     strlcpy(cfg.api_path,   CFG_DEFAULT_API_PATH,   sizeof(cfg.api_path));
     cfg.api_https  = CFG_DEFAULT_API_HTTPS;
-    cfg.fetch_sec  = CFG_DEFAULT_FETCH_SEC;
-    cfg.intensity  = CFG_DEFAULT_INTENSITY;
-    cfg.scroll_ms  = CFG_DEFAULT_SCROLL_MS;
+    cfg.fetch_sec      = CFG_DEFAULT_FETCH_SEC;
+    cfg.intensity_min = CFG_DEFAULT_INTENSITY_MIN;
+    cfg.intensity_max = CFG_DEFAULT_INTENSITY_MAX;
+    cfg.scroll_ms     = CFG_DEFAULT_SCROLL_MS;
 }
 
 // =============================================================
@@ -118,9 +120,10 @@ static void loadConfig() {
     if (doc["api_host"].is<const char*>())   strlcpy(cfg.api_host,  doc["api_host"],  sizeof(cfg.api_host));
     if (doc["api_path"].is<const char*>())   strlcpy(cfg.api_path,  doc["api_path"],  sizeof(cfg.api_path));
     if (!doc["api_https"].isNull())          cfg.api_https = doc["api_https"];
-    if (!doc["fetch_sec"].isNull())          cfg.fetch_sec = doc["fetch_sec"];
-    if (!doc["intensity"].isNull())          cfg.intensity = doc["intensity"];
-    if (!doc["scroll_ms"].isNull())          cfg.scroll_ms = doc["scroll_ms"];
+    if (!doc["fetch_sec"].isNull())      cfg.fetch_sec      = doc["fetch_sec"];
+    if (!doc["int_min"].isNull())         cfg.intensity_min  = doc["int_min"];
+    if (!doc["int_max"].isNull())         cfg.intensity_max  = doc["int_max"];
+    if (!doc["scroll_ms"].isNull())      cfg.scroll_ms      = doc["scroll_ms"];
 
     Serial.println(F("Konfiguration aus EEPROM geladen."));
 }
@@ -136,7 +139,8 @@ static void saveConfig() {
     doc["api_path"]  = cfg.api_path;
     doc["api_https"] = cfg.api_https;
     doc["fetch_sec"] = cfg.fetch_sec;
-    doc["intensity"] = cfg.intensity;
+    doc["int_min"]   = cfg.intensity_min;
+    doc["int_max"]   = cfg.intensity_max;
     doc["scroll_ms"] = cfg.scroll_ms;
 
     char buf[EEPROM_SIZE - EEPROM_DATA_OFF];
@@ -211,7 +215,8 @@ input[type=checkbox]{width:18px;height:18px}
         html += fieldCheck("HTTPS", "api_https", cfg.api_https);
         html += fieldInt("Intervall (Sek.)", "fetch_sec", cfg.fetch_sec);
         html += "</table><h2>Display</h2><table>";
-        html += fieldInt("Helligkeit (0-15)", "intensity", cfg.intensity);
+        html += fieldInt("Helligkeit min (dunkel, 0-15)", "int_min", cfg.intensity_min);
+        html += fieldInt("Helligkeit max (hell, 0-15)",   "int_max", cfg.intensity_max);
         html += fieldInt("Scroll-Geschw. (ms)", "scroll_ms", cfg.scroll_ms);
         html += R"(</table>
 <button class='btn' type='submit'>Speichern &amp; Neustart</button>
@@ -233,7 +238,8 @@ input[type=checkbox]{width:18px;height:18px}
         strlcpy(cfg.api_path,  get("api_path",  cfg.api_path).c_str(),  sizeof(cfg.api_path));
         cfg.api_https  = server.hasArg("api_https");
         cfg.fetch_sec  = get("fetch_sec", String(cfg.fetch_sec).c_str()).toInt();
-        cfg.intensity  = constrain(get("intensity", String(cfg.intensity).c_str()).toInt(), 0, 15);
+        cfg.intensity_min = constrain(get("int_min", String(cfg.intensity_min).c_str()).toInt(), 0, 15);
+        cfg.intensity_max = constrain(get("int_max", String(cfg.intensity_max).c_str()).toInt(), 0, 15);
         cfg.scroll_ms  = get("scroll_ms", String(cfg.scroll_ms).c_str()).toInt();
         if (cfg.fetch_sec < 10)  cfg.fetch_sec = 10;
         if (cfg.scroll_ms < 10)  cfg.scroll_ms = 10;
@@ -372,8 +378,9 @@ void setup() {
     loadConfig();
 
     // Display initialisieren
+    pinMode(LDR_PIN, INPUT);
     display.begin();
-    display.setIntensity(cfg.intensity);
+    display.setIntensity((cfg.intensity_min + cfg.intensity_max) / 2);
     display.displayClear();
     display.setTextAlignment(PA_LEFT);
     display.setSpeed(cfg.scroll_ms);
@@ -438,6 +445,16 @@ void loop() {
             newDataReady = false;
         }
         display.displayScroll(scrollText, PA_LEFT, PA_SCROLL_LEFT, cfg.scroll_ms);
+    }
+
+    // LDR: Helligkeit automatisch anpassen
+    static unsigned long lastLdr = 0;
+    if (millis() - lastLdr >= LDR_UPDATE_MS) {
+        lastLdr = millis();
+        int raw = analogRead(LDR_PIN);   // 0 (dunkel) … 1023 (hell)
+        int bright = map(raw, 0, 1023, cfg.intensity_min, cfg.intensity_max);
+        bright = constrain(bright, 0, 15);
+        display.setIntensity(bright);
     }
 
     // Periodischer API-Abruf
