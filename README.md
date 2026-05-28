@@ -36,6 +36,10 @@ Solar_WiFi_Weather_Station/
 │       ├── Translation_DE.h
 │       ├── Translation_EN.h
 │       └── ... (IT, ES, FR, NL, NO, PL, RO, TR)
+├── sketch_sws_display/
+│   ├── sketch_sws_display.ino                 # Display-Sketch (LED-Matrix Laufschrift)
+│   ├── DisplaySettings.h                      # WiFi, API, Pins, Helligkeit
+│   └── README.md                              # Verdrahtung & Bibliotheken
 ├── api/
 │   ├── data.php          # POST Messung / GET letzter Datensatz  ← Firmware-Endpoint
 │   ├── history.php       # GET Historien-Daten
