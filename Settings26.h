@@ -23,10 +23,6 @@ const String Version = "2.7";
 // Standard: D6 = GPIO12. Taste zwischen D6 und GND anschließen.
 #define CONFIG_BUTTON_PIN   12      // GPIO12 = D6  (boot-neutral)
 #define CONFIG_AP_SSID      "SWS-Config"   // WLAN-Name des Konfigurations-APs
-// Status-LED für Konfigurations-Portal.
-// Externe LED an D5 (GPIO14) mit Vorwiderstand ~220 Ohm gegen GND.
-#define CONFIG_LED_PIN      14      // GPIO14 = D5 (externe LED)
-#define CONFIG_LED_ACTIVE   HIGH    // HIGH = LED an 3V3/Vorwiderstand gegen GND
 
 /******* Language Selection **************************************************
  * Choose the language by including the corresponding translation file.

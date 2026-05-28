@@ -532,33 +532,16 @@ void startConfigPortal() {
       "<p style='font-family:sans-serif;margin:20px'>"
       "&#10003; Gespeichert. Neustart in 3 Sekunden...</p></body></html>");
 
-    // Schnelles Blinken als Speicher-Bestätigung
-    for (int i = 0; i < 6; i++) {
-      digitalWrite(CONFIG_LED_PIN, CONFIG_LED_ACTIVE);
-      delay(100);
-      digitalWrite(CONFIG_LED_PIN, !CONFIG_LED_ACTIVE);
-      delay(100);
-    }
-    digitalWrite(CONFIG_LED_PIN, !CONFIG_LED_ACTIVE);
     delay(500);
     ESP.restart();
   });
 
   server.begin();
 
-  // LED blinkt: Konfigurations-Portal aktiv
-  unsigned long lastBlink = millis();
-  bool ledState           = true;
   Serial.println("Warte auf Konfiguration (kein Timeout – Neustart erfolgt nach dem Speichern)...");
 
   while (true) {
     server.handleClient();
-    // LED alle 500 ms blinken lassen
-    if (millis() - lastBlink >= 500) {
-      lastBlink = millis();
-      ledState  = !ledState;
-      digitalWrite(CONFIG_LED_PIN, ledState ? CONFIG_LED_ACTIVE : !CONFIG_LED_ACTIVE);
-    }
     yield();
   }
   // Kein Timeout: Das Portal läuft bis der Nutzer speichert (/save → ESP.restart())
@@ -576,8 +559,6 @@ void setup() {
 
   // Konfigurations-Portal prüfen: Button (CONFIG_BUTTON_PIN) beim Start LOW?
   pinMode(CONFIG_BUTTON_PIN, INPUT_PULLUP);
-  pinMode(CONFIG_LED_PIN, OUTPUT);
-  digitalWrite(CONFIG_LED_PIN, !CONFIG_LED_ACTIVE);  // LED im Normalbetrieb aus
   delay(10);
   if (digitalRead(CONFIG_BUTTON_PIN) == LOW) {
     startConfigPortal();   // kehrt nicht zurück (Neustart am Ende)
@@ -1547,11 +1528,6 @@ void goToSleep(unsigned int sleepmin) {
   Serial.print ("Going to sleep now for ");
   Serial.print (sleepmin);
   Serial.print (" Minute(s).");
-
-  // LED vor Deep Sleep explizit aus und Pin als Input setzen,
-  // damit kein Reststrom durch GPIO14 im Schlaf fließt (verhindert Glimmen).
-  digitalWrite(CONFIG_LED_PIN, LOW);
-  pinMode(CONFIG_LED_PIN, INPUT);
 
   ESP.deepSleep(sleepmin * 60 * 1000000); // convert to microseconds
 } // end of goToSleep()
