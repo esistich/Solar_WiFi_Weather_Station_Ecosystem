@@ -1368,23 +1368,26 @@ void ReadFromMQTT() {
 
 #if USE_DS18B20
 float getTemperature() {
-  // FIX v2.6: previously took 32 reads of the SAME conversion (no-op smoothing).
-  // Now performs a single proper 12-bit conversion (0.0625°C resolution).
-  s18d20.requestTemperatures();
-  delay(750);   // 12-bit conversion time per Maxim datasheet
-  float t = s18d20.getTempCByIndex(0);
+  // Bis zu 3 Versuche – DS18B20 braucht manchmal einen zweiten Anlauf
+  // (typisch bei fehlendem oder zu schwachem Pull-up-Widerstand).
+  for (int attempt = 1; attempt <= 3; attempt++) {
+    s18d20.requestTemperatures();
+    delay(750);   // 12-bit Konvertierungszeit laut Maxim Datenblatt
+    float t = s18d20.getTempCByIndex(0);
 
-  Serial.print("DS18B20 Rohwert: ");
-  Serial.print(t);
-  Serial.println("°C");
+    Serial.print("DS18B20 Versuch ");
+    Serial.print(attempt);
+    Serial.print(": ");
+    Serial.print(t);
+    Serial.println("°C");
 
-  if (t > -126.9 && t < 84.9) {   // -127 = kein Sensor, 85 = Kurzschluss/Fehler
-    return t;
+    if (t > -126.9 && t < 84.9) {   // -127 = kein Sensor, 85.0 = Fehler/Kurzschluss
+      return t;
+    }
+    if (attempt < 3) delay(200);  // kurz warten vor nächstem Versuch
   }
-  else {
-    Serial.println("DS18B20 Fehler: Sensor nicht gefunden oder Kurzschluss! Prüfe Verkabelung und 4.7kΩ Pull-up auf D7.");
-    return -88;
-  }
+  Serial.println("DS18B20 Fehler: alle 3 Versuche fehlgeschlagen! Prüfe Verkabelung und 4.7kΩ Pull-up auf D7.");
+  return -88;
 }
 #endif
 
@@ -1544,5 +1547,11 @@ void goToSleep(unsigned int sleepmin) {
   Serial.print ("Going to sleep now for ");
   Serial.print (sleepmin);
   Serial.print (" Minute(s).");
+
+  // LED vor Deep Sleep explizit aus und Pin als Input setzen,
+  // damit kein Reststrom durch GPIO14 im Schlaf fließt (verhindert Glimmen).
+  digitalWrite(CONFIG_LED_PIN, LOW);
+  pinMode(CONFIG_LED_PIN, INPUT);
+
   ESP.deepSleep(sleepmin * 60 * 1000000); // convert to microseconds
 } // end of goToSleep()
