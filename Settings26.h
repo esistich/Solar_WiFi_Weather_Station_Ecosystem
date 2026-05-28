@@ -53,18 +53,13 @@ const String Version = "2.7";
 
 #define USE_BME280     1     // Bosch BME280: pressure (REQUIRED), humidity, temperature
 #define USE_DS18B20    1     // Dallas 18B20:  temperature only (one-wire on D7)
-#define USE_SHT45      1     // Sensirion SHT45: temperature + humidity (I²C @ 0x44)
 
 // ---- Step 2: Which sensor should be used for the actual readings? ----
-// When multiple sensors are enabled, all of them are read and logged to
-// Serial. But only ONE temperature source and ONE humidity source are used
-// for the Zambretti forecast, MQTT, Blynk, dewpoint etc.
-//
-// Pick one:  SRC_BME = BME280,  SRC_DAL = DS18B20,  SRC_SHT = SHT45
+// Pick one:  SRC_BME = BME280,  SRC_DAL = DS18B20
 // (If you pick a sensor that is disabled above, the code falls back to BME280.)
 
-#define TEMP_SOURCE    SRC_DAL    // recommended outdoor: Dallas (better thermal buffering in sun)
-#define HUMI_SOURCE    SRC_SHT    // recommended outdoor: SHT45 (PTFE membrane, integrated heater)
+#define TEMP_SOURCE    SRC_DAL    // DS18B20 (bessere thermische Entkopplung im Freien)
+#define HUMI_SOURCE    SRC_BME    // BME280 (einzige verbleibende Feuchtigkeitsquelle)
 
 /****** WiFi Settings (Compile-Zeit-Fallbacks) *****************************/
 

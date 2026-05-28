@@ -33,17 +33,10 @@
     - Basic-Auth per Base64-Encoder
   - Alle Laufzeit-Einstellungen auf cfg.*-Struct umgestellt
 
-  v2.6 (April 2026) - SHT45 migration, configurable sensors & robustness pass
-  - Replaced HDC1080 (failed after ~5 years outdoor) with Sensirion SHT45
-    - Heater now activated BEFORE every measurement (200 mW × 1 s, command 0x39)
-    - Better long-term stability, factory PTFE membrane (SHT45-AD1B)
-    - Higher accuracy: ±1.0% rH, ±0.1°C
-  - Configurable sensor selection via Settings26.h (#define switches)
-    - USE_BME280, USE_DS18B20, USE_SHT45 to enable/disable each sensor
-    - TEMP_SOURCE / HUMI_SOURCE to choose canonical source when multiple
-      sensors are available
-    - Compile-time validation: BME280 always required (pressure/Zambretti);
-      invalid combinations produce #error messages.
+  v2.6 (April 2026) - Configurable sensors & robustness pass
+  - Sensors: BME280 (pressure/humidity) + DS18B20 (pool temperature)
+  - USE_BME280, USE_DS18B20 to enable/disable sensors
+  - TEMP_SOURCE to choose canonical temperature source (SRC_BME or SRC_DAL)
   - Bugfixes:
     - getTemperature(): was reading the same DS18B20 conversion 32 times.
       Now performs a single 12-bit conversion with proper wait.
@@ -90,7 +83,6 @@
 // =====================================================================
 #define SRC_BME 1
 #define SRC_DAL 2
-#define SRC_SHT 3
 
 // =====================================================================
 // Sensor configuration validation (compile-time)
@@ -105,22 +97,6 @@
   #define TEMP_SOURCE SRC_BME
 #endif
 
-#if (TEMP_SOURCE == SRC_SHT) && !USE_SHT45
-  #warning "TEMP_SOURCE = SRC_SHT but USE_SHT45 = 0. Falling back to BME280 temperature."
-  #undef  TEMP_SOURCE
-  #define TEMP_SOURCE SRC_BME
-#endif
-
-#if (HUMI_SOURCE == SRC_SHT) && !USE_SHT45
-  #warning "HUMI_SOURCE = SRC_SHT but USE_SHT45 = 0. Falling back to BME280 humidity."
-  #undef  HUMI_SOURCE
-  #define HUMI_SOURCE SRC_BME
-#endif
-
-#if (HUMI_SOURCE == SRC_DAL)
-  #error "HUMI_SOURCE = SRC_DAL is invalid: DS18B20 cannot measure humidity. Use SRC_BME or SRC_SHT."
-#endif
-
 // =====================================================================
 // Conditional includes (only what's actually used)
 // =====================================================================
@@ -130,10 +106,6 @@
 #endif
 
 #include <Wire.h>                   // I2C (always needed for BME280)
-
-#if USE_SHT45
-  #include "Adafruit_SHT4x.h"        // SHT4x temp & humidity sensor
-#endif
 
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
@@ -308,10 +280,6 @@ void saveConfig() {
 
 Adafruit_BME280 bme;                // I2C
 
-#if USE_SHT45
-  Adafruit_SHT4x sht4 = Adafruit_SHT4x();
-#endif
-
 #if USE_DS18B20
   OneWire oneWire(ONE_WIRE_BUS);
   DallasTemperature s18d20(&oneWire);
@@ -325,10 +293,6 @@ EasyNTPClient ntpClient(udp, NTP_SERVER, 0);  // reading UTC
   float measured_temp_dal;
 #endif
 float measured_temp_bme;
-#if USE_SHT45
-  float measured_temp_sht;
-  float measured_humi_sht;
-#endif
 float measured_temp;
 float adjusted_temp;
 float measured_humi;
@@ -573,23 +537,14 @@ void setup() {
   Serial.print("Sensors enabled: BME280=");
   Serial.print(USE_BME280 ? "Y" : "N");
   Serial.print("  DS18B20=");
-  Serial.print(USE_DS18B20 ? "Y" : "N");
-  Serial.print("  SHT45=");
-  Serial.println(USE_SHT45 ? "Y" : "N");
+  Serial.println(USE_DS18B20 ? "Y" : "N");
   Serial.print("Canonical sources: TEMP=");
   #if   TEMP_SOURCE == SRC_BME
     Serial.print("BME280");
   #elif TEMP_SOURCE == SRC_DAL
     Serial.print("DS18B20");
-  #elif TEMP_SOURCE == SRC_SHT
-    Serial.print("SHT45");
   #endif
-  Serial.print("  HUMI=");
-  #if   HUMI_SOURCE == SRC_BME
-    Serial.println("BME280");
-  #elif HUMI_SOURCE == SRC_SHT
-    Serial.println("SHT45");
-  #endif
+  Serial.print("  HUMI=BME280");
 
   Serial.print("Language: ");
   Serial.println(LANG_NAME);
@@ -714,19 +669,7 @@ void setup() {
   Serial.println("DS18B20 initialized at 12-bit resolution.");
 #endif
 
-#if USE_SHT45
-  // ----- SHT45 -----
-  if (!sht4.begin()) {
-    Serial.println("Could not find SHT45 sensor, check wiring!");
-  } else {
-    Serial.print("SHT4x serial: 0x");
-    Serial.println(sht4.readSerial(), HEX);
-    sht4.setPrecision(SHT4X_HIGH_PRECISION);
-    Serial.println("SHT45 initialized: HIGH precision, heater controlled per measurement.");
-  }
-#endif
-
-  measurementEvent();             // calling function to get all data from the different sensors
+measurementEvent();             // calling function to get all data from the different sensors
 
   if (cfg.mqtt_enabled) ReadFromMQTT();       // reading timestamp, accuracy and pressure curve
   else ReadFromSPIFFS();
@@ -856,46 +799,14 @@ void measurementEvent() {
   Serial.println("°C; ");
 #endif
 
-#if USE_SHT45
-  // ----- SHT45: heater pulse BEFORE measurement -----
-  // Command 0x39: 200 mW × 1 s, then automatic measurement.
-  // The heater pulse drives moisture out of the polymer membrane;
-  // the follow-up read at ambient temperature is the "clean" value.
-  Serial.println("SHT45: applying 200mW heater pulse (1s)...");
-  sht4.setHeater(SHT4X_HIGH_HEATER_1S);
-  sensors_event_t humidity_h, temp_h;
-  sht4.getEvent(&humidity_h, &temp_h);   // triggers heated measurement (~1.1s)
-  delay(500);  // FIX: Membran braucht ≥500 ms um auf Umgebungstemperatur zurückzukehren; 50 ms waren zu kurz.
-
-  // Now take the actual ambient measurement without heater
-  sht4.setHeater(SHT4X_NO_HEATER);
-  sensors_event_t humidity, temp;
-  sht4.getEvent(&humidity, &temp);
-
-  measured_temp_sht = temp.temperature;
-  measured_humi_sht = humidity.relative_humidity;
-
-  Serial.print("Temp SHT45: ");
-  Serial.print(measured_temp_sht);
-  Serial.print("°C; Humidity SHT45: ");
-  Serial.print(measured_humi_sht);
-  Serial.println("%; ");
-#endif
-
   // ----- Selection of canonical values per Settings26.h -----
 #if   TEMP_SOURCE == SRC_BME
   measured_temp = measured_temp_bme;
 #elif TEMP_SOURCE == SRC_DAL
   measured_temp = measured_temp_dal;
-#elif TEMP_SOURCE == SRC_SHT
-  measured_temp = measured_temp_sht;
 #endif
 
-#if   HUMI_SOURCE == SRC_BME
   measured_humi = measured_humi_bme;
-#elif HUMI_SOURCE == SRC_SHT
-  measured_humi = measured_humi_sht;
-#endif
 
   // ----- Pressure (always BME280) -----
   Serial.print("Pressure: ");
