@@ -267,10 +267,40 @@ input[type=checkbox]{width:18px;height:18px}
 }
 
 // =============================================================
+//  Umlaute und Sonderzeichen für 7-Segment-kompatible ASCII-Font ersetzen
+// =============================================================
+static void replaceUmlauts(const char* src, char* dst, size_t dstLen) {
+    size_t di = 0;
+    for (size_t si = 0; src[si] && di < dstLen - 1; ) {
+        unsigned char c  = (unsigned char)src[si];
+        unsigned char c2 = (unsigned char)src[si + 1];
+        // UTF-8 Zweibyte-Sequenzen (0xC3 xx)
+        if (c == 0xC3 && di + 2 < dstLen) {
+            switch (c2) {
+                case 0xA4: dst[di++] = 'a'; dst[di++] = 'e'; break;  // ä
+                case 0x84: dst[di++] = 'A'; dst[di++] = 'e'; break;  // Ä
+                case 0xB6: dst[di++] = 'o'; dst[di++] = 'e'; break;  // ö
+                case 0x96: dst[di++] = 'O'; dst[di++] = 'e'; break;  // Ö
+                case 0xBC: dst[di++] = 'u'; dst[di++] = 'e'; break;  // ü
+                case 0x9C: dst[di++] = 'U'; dst[di++] = 'e'; break;  // Ü
+                case 0x9F: dst[di++] = 's'; dst[di++] = 's'; break;  // ß
+                default:   dst[di++] = '?'; break;
+            }
+            si += 2;
+        } else {
+            dst[di++] = (char)c;
+            si++;
+        }
+    }
+    dst[di] = '\0';
+}
+
+// =============================================================
 //  Anzeigetext aus JSON zusammenbauen
 // =============================================================
 static void buildScrollText(const JsonDocument& doc, char* out, size_t outLen) {
     char tmp[16];
+    char zbuf[160];   // Zambretti-Text nach Umlaut-Ersetzung
 
     float  temp           = doc["temperature"]        | 0.0f;
     float  pool           = doc["pool_temperature"]   | -99.0f;
@@ -281,13 +311,13 @@ static void buildScrollText(const JsonDocument& doc, char* out, size_t outLen) {
 
     out[0] = '\0';
 
-    strncat(out, "T:", outLen - strlen(out) - 1);
+    strncat(out, "Luft:", outLen - strlen(out) - 1);
     dtostrf(temp, 1, 1, tmp);
     strncat(out, tmp, outLen - strlen(out) - 1);
     strncat(out, "\xB0""C  ", outLen - strlen(out) - 1);
 
     if (pool > -90.0f) {
-        strncat(out, "Pool:", outLen - strlen(out) - 1);
+        strncat(out, "Wasser:", outLen - strlen(out) - 1);
         dtostrf(pool, 1, 1, tmp);
         strncat(out, tmp, outLen - strlen(out) - 1);
         strncat(out, "\xB0""C  ", outLen - strlen(out) - 1);
@@ -302,12 +332,14 @@ static void buildScrollText(const JsonDocument& doc, char* out, size_t outLen) {
     strncat(out, "hPa", outLen - strlen(out) - 1);
 
     if (strlen(zambretti) > 0) {
+        replaceUmlauts(zambretti, zbuf, sizeof(zbuf));
         strncat(out, "  ", outLen - strlen(out) - 1);
-        strncat(out, zambretti, outLen - strlen(out) - 1);
+        strncat(out, zbuf, outLen - strlen(out) - 1);
     }
     if (strlen(trend) > 0) {
+        replaceUmlauts(trend, zbuf, sizeof(zbuf));
         strncat(out, " (", outLen - strlen(out) - 1);
-        strncat(out, trend, outLen - strlen(out) - 1);
+        strncat(out, zbuf, outLen - strlen(out) - 1);
         strncat(out, ")", outLen - strlen(out) - 1);
     }
 }
