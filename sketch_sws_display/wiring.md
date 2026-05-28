@@ -20,6 +20,11 @@ Board: **WEMOS D1 Mini Pro** (ESP8266)
 
 ## MAX7219 / 1088AS LED-Matrix (4× kaskadiert)
 
+> ⚠️ **WICHTIG – GPIO15 Boot-Anforderung des ESP8266**  
+> GPIO15 (D8) muss beim Booten LOW sein. Da der MAX7219 CS im Leerlauf HIGH hält,  
+> **muss** ein **10kΩ Pull-down** zwischen D8 und GND eingebaut werden.  
+> Ohne ihn startet der ESP im falschen Boot-Mode (`boot mode:(3,6)`) und crasht sofort.
+
 ```
 WEMOS D1 Mini Pro     MAX7219 Modul #1     Modul #2 … #4
 ─────────────────     ────────────────     ─────────────
@@ -28,6 +33,8 @@ GND           ─────  GND              ─── GND
 D5 (GPIO14)   ─────  CLK              ─── CLK
 D7 (GPIO13)   ─────  DIN
 D8 (GPIO15)   ─────  CS               ─── CS
+
+D8 (GPIO15) ── 10kΩ ── GND   ← PFLICHT: Boot-Schutz
 
 					  DOUT ────────────── DIN (Modul #2)
 										  DOUT ──── DIN (#3) …
