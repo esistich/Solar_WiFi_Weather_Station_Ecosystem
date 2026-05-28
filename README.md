@@ -37,15 +37,18 @@ Solar_WiFi_Weather_Station/
 │       ├── Translation_EN.h
 │       └── ... (IT, ES, FR, NL, NO, PL, RO, TR)
 ├── api/
-│   ├── data.php          # POST Messung / GET letzter Datensatz
+│   ├── data.php          # POST Messung / GET letzter Datensatz  ← Firmware-Endpoint
 │   ├── history.php       # GET Historien-Daten
 │   ├── status.php        # Systemstatus
-│   ├── auth.php          # HTTP-Basic-Auth
-│   ├── db.php            # Datenbankverbindung
-│   ├── schema.sql        # Datenbankschema + Migration
-│   ├── ha_sensors.yaml   # Home Assistant Integration
-│   ├── .htaccess         # HTTPS-Weiterleitung
 │   ├── index.html        # Platzhalter-Startseite
+│   ├── .htaccess         # HTTPS-Weiterleitung + Schutz lib/
+│   ├── lib/
+│   │   ├── auth.php      # HTTP-Basic-Auth
+│   │   └── db.php        # Datenbankverbindung
+│   ├── homeassistant/
+│   │   └── ha_sensors.yaml
+│   ├── install/
+│   │   └── schema.sql    # Datenbankschema + Migration
 │   └── README.md         # API-Dokumentation
 ├── docs/
 │   ├── IMG_2951.jpg

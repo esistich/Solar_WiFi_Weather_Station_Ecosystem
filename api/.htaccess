@@ -5,12 +5,14 @@
 # Verzeichnislisting deaktivieren
 Options -Indexes
 
-# Hilfsdateien vor Direktzugriff schützen
-<Files "auth.php">
+# lib/ komplett vor Direktzugriff schützen
+<IfModule mod_authz_core.c>
+	<Directory "lib">
+		Require all denied
+	</Directory>
+</IfModule>
+# Fallback für ältere Apache-Versionen
+<FilesMatch "^(auth|db)\.php$">
 	Order allow,deny
 	Deny from all
-</Files>
-<Files "db.php">
-	Order allow,deny
-	Deny from all
-</Files>
+</FilesMatch>

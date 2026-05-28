@@ -21,8 +21,8 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/auth.php';   // sendCorsHeaders()
-require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/lib/auth.php';   // sendCorsHeaders()
+require_once __DIR__ . '/lib/db.php';
 
 // Schwellwert in Sekunden: nach dieser Zeit gilt die Station als "stale".
 // Empfehlung: 3 × Sleep-Intervall (z.B. 3 × 600s = 1800s)

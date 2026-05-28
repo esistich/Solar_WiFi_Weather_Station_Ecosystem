@@ -19,14 +19,19 @@ PHP/MySQL-API zur Speicherung und Abfrage der Messdaten der Solar WiFi Weather S
 
 ```
 api/
-├── auth.php        Credentials + requireBasicAuth() + sendCorsHeaders()
-├── db.php          PDO-Datenbankverbindung (Singleton)
-├── data.php        GET letzter Messwert (inkl. data_age_s)  /  POST neuer Datensatz
-├── history.php     GET Historienabfrage mit Filtern
-├── status.php      GET Health-Endpoint für Home Assistant (kein Auth)
-├── ha_sensors.yaml Fertige Home-Assistant-Konfiguration
-├── schema.sql      Datenbank-Schema (einmalig importieren)
-└── README.md       Diese Datei
+├── data.php            GET letzter Messwert / POST neuer Datensatz  ← Firmware-Endpoint
+├── history.php         GET Historienabfrage mit Filtern
+├── status.php          GET Health-Endpoint für Home Assistant (kein Auth)
+├── index.html          Platzhalter-Startseite
+├── .htaccess           HTTPS-Weiterleitung + Zugriffsschutz für lib/
+├── lib/
+│   ├── auth.php        Credentials + requireBasicAuth() + sendCorsHeaders()
+│   └── db.php          PDO-Datenbankverbindung (Singleton)
+├── homeassistant/
+│   └── ha_sensors.yaml Fertige Home-Assistant-Sensor-Konfiguration
+├── install/
+│   └── schema.sql      Datenbank-Schema (einmalig importieren)
+└── README.md           Diese Datei
 ```
 
 ---
@@ -44,12 +49,12 @@ CREATE DATABASE solarweather
 ### 2. Schema importieren
 
 ```bash
-mysql -u root -p solarweather < api/schema.sql
+mysql -u root -p solarweather < api/install/schema.sql
 ```
 
 ### 3. Konfiguration anpassen
 
-**`api/db.php`** – Datenbankverbindung:
+**`api/lib/db.php`** – Datenbankverbindung:
 
 ```php
 define('DB_HOST', 'localhost');
@@ -58,7 +63,7 @@ define('DB_USER', 'YOUR_DB_USER');
 define('DB_PASS', 'YOUR_DB_PASS');
 ```
 
-**`api/auth.php`** – API-Zugangsdaten (gelten für alle Endpunkte):
+**`api/lib/auth.php`** – API-Zugangsdaten (gelten für alle Endpunkte):
 
 ```php
 define('API_USER', 'NAy1b4GpuS3dEvej');
@@ -69,7 +74,7 @@ define('API_PASS', 'REDACTED_API_PASS');
 
 ### 4. Dateien hochladen
 
-Alle Dateien aus `api/` in das entsprechende Verzeichnis auf dem Webserver hochladen.
+Alle Dateien aus `api/` **inklusive Unterordner** (`lib/`, `homeassistant/`, `install/`) in das entsprechende Verzeichnis auf dem Webserver hochladen.
 
 ### 5. Sketch konfigurieren (`Settings26.h`)
 
@@ -156,12 +161,12 @@ Alle schreibenden (POST) und historischen (GET `/history.php`) Endpunkte sind pe
 Der Sketch nutzt `WiFiClientSecure` mit `setInsecure()` – die Verbindung ist verschlüsselt, das Zertifikat wird jedoch **nicht geprüft**. Das verhindert Lauschangriffe, schützt aber nicht vor MITM. Für höhere Sicherheit kann in `sendToAPI()` `client.setFingerprint(SHA1_HEX)` eingetragen werden.
 
 ### Direktzugriff auf PHP-Hilfsdateien sperren
-`auth.php` und `db.php` sollten nicht direkt über den Browser erreichbar sein. Apache-Beispiel (`.htaccess` im `api/`-Verzeichnis):
+`lib/auth.php` und `lib/db.php` sind durch folgende Regel in `.htaccess` vor direktem Browser-Zugriff geschützt:
 
 ```apache
-<FilesMatch "^(auth|db)\.php$">
+<Directory "lib">
 	Require all denied
-</FilesMatch>
+</Directory>
 ```
 
 ---
@@ -349,7 +354,7 @@ SWS (ESP8266)  ──HTTPS POST──▶  api/data.php  ◀──HTTPS GET──
 
 ### Schnellstart
 
-1. `api/ha_sensors.yaml` in dein HA-Konfigurationsverzeichnis kopieren
+1. `api/homeassistant/ha_sensors.yaml` in dein HA-Konfigurationsverzeichnis kopieren
 2. In `ha_sensors.yaml` ersetzen:
    - `timm-sander.net/swsapi` → bereits korrekt
    - `NAy1b4GpuS3dEvej` → `NAy1b4GpuS3dEvej`
@@ -378,7 +383,7 @@ SWS (ESP8266)  ──HTTPS POST──▶  api/data.php  ◀──HTTPS GET──
 ```
 Sekunden seit der letzten Messung – nützlich für HA-Templates und Watchdog-Automationen.
 
-### Enthaltene Automationen (`ha_sensors.yaml`)
+### Enthaltene Automationen (`homeassistant/ha_sensors.yaml`)
 
 | Automation | Auslöser | Aktion |
 |---|---|---|
