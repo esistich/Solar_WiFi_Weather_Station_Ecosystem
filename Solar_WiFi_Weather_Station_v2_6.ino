@@ -14,59 +14,37 @@
   ====================================================================
   Version History (recent):
 
-  v2.7 (Juni 2025) - Konfigurations-Portal, PHP/MySQL-API & Historien-Endpoint
-  - Neues AP-Konfigurations-Portal (GPIO0 beim Boot gedrückt halten):
-    - ESP8266 öffnet WLAN-Accesspoint "SWS-Config" (kein Passwort)
-    - Webinterface unter 192.168.4.1 zum Einstellen von WiFi, MQTT, API,
-      Temperaturkorrektur, Elevation und Schlaf-Intervall
-    - Alle Einstellungen werden als JSON im EEPROM gespeichert (Magic: SWS2)
-    - Settings26.h bleibt als Compile-Zeit-Fallback erhalten
-    - Portal schließt sich nach 60 s automatisch (danach Neustart)
+  v2.7 (2025/2026) - API-only Edition
+  - MQTT vollständig entfernt – Station sendet ausschließlich an REST-API
+  - Blynk entfernt
+  - SHT45 entfernt (nur noch BME280 + DS18B20)
+  - Status-LED entfernt
+  - AP-Konfigurations-Portal (Button D6 beim Boot gedrückt halten):
+    - ESP8266 öffnet WLAN-Accesspoint "SWS-Config"
+    - Webinterface unter 192.168.4.1 (kein Timeout, Neustart nur per Speichern)
+    - Einstellungen als JSON im EEPROM (Magic: SWS2)
   - PHP/MySQL-REST-API (api/):
-    - data.php  : POST neue Messung / GET letzten Datensatz
+    - data.php   : POST neue Messung / GET letzten Datensatz
     - history.php: GET Historien-Daten (limit, from, to)
-    - auth.php  : zentrale HTTP-Basic-Auth-Prüfung
-    - schema.sql: vollständiges Datenbankschema
-    - README.md : Installations- und Nutzungsdokumentation
-  - Sketch-seitige API-Anbindung (sendToAPI()):
-    - HTTP oder HTTPS (Laufzeit-Auswahl über cfg.api_https)
-    - Basic-Auth per Base64-Encoder
-  - Alle Laufzeit-Einstellungen auf cfg.*-Struct umgestellt
+    - status.php : Systemstatus
+    - schema.sql : vollständiges Datenbankschema
+  - sendToAPI(): HTTP/HTTPS, Basic-Auth, Zambretti-Felder eingeschlossen
+  - DS18B20 Pooltemperatur auf D7 (GPIO13)
+  - USB-Betrieb erkannt (volt < 0.5 V → normaler Schlaf statt Dauerschlaf)
 
   v2.6 (April 2026) - Configurable sensors & robustness pass
-  - Sensors: BME280 (pressure/humidity) + DS18B20 (pool temperature)
-  - USE_BME280, USE_DS18B20 to enable/disable sensors
-  - TEMP_SOURCE to choose canonical temperature source (SRC_BME or SRC_DAL)
-  - Bugfixes:
-    - getTemperature(): was reading the same DS18B20 conversion 32 times.
-      Now performs a single 12-bit conversion with proper wait.
-    - ReadFromMQTT(): added receive-flag and timeout-aware wait so a missing
-      MQTT pressure message no longer triggers an unwanted FirstTimeRun()
-      that would wipe the 6h pressure curve.
-    - exit(0) on SPIFFS failure replaced with goToSleep() to prevent
-      battery drain through hung WiFi.
-    - reconnect(): added retry loop (3 attempts) instead of single-shot.
-    - goToSleep() no longer publishes MQTT status when MQTT==false.
-    - Battery voltage: now averaged over 16 ADC reads to reduce noise.
-    - NTP wait loop: yield() added to prevent soft WDT reset.
-    - Sprach-Hysterese (DE/DW switch) to avoid flapping at ~2°C.
-    - Defensive default in Zambretti switch statements.
-    - Removed double semicolon typo in case 13.
-  - Style:
-    - resetFunc replaced with ESP.restart() (cleaner on ESP8266).
-    - Cleaned up auskommentierter Fahrenheit-Code.
-  - Kept unchanged:
-    - DHCP for WiFi (per user preference)
-    - Fixed sleep interval (per user preference)
-    - All Zambretti / trend / translation / MQTT message logic 1:1
+  - Sensors: BME280 + DS18B20
+  - USE_BME280, USE_DS18B20, TEMP_SOURCE konfigurierbar
+  - Bugfixes: getTemperature(), SPIFFS-Fehlerbehandlung, Battery-ADC (16×),
+    NTP-yield(), Zambretti-Hysterese, ESP.restart() statt resetFunc
 
-  ////  Features :  /////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // 1. Connect to Wi-Fi, and upload the data to either Blynk App and/or any MQTT broker
-  // 2. Monitoring Weather parameters like Temperature, Pressure abs, Pressure MSL and Humidity.
-  // 3. Extra Ports to add more Weather Sensors like UV Index, Light and Rain Guage etc.
-  // 4. Remote Battery Status Monitoring
-  // 5. Using Sleep mode to reduce the energy consumed
-  ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  Features:
+  // 1. WiFi-Verbindung, Messung, Upload an PHP/MySQL-REST-API
+  // 2. Temperatur, Taupunkt, Wärmeindex, Luftfeuchtigkeit, Luftdruck (abs+rel)
+  // 3. Zambretti-Wetterprognose (mehrsprachig)
+  // 4. Pooltemperatur (DS18B20)
+  // 5. Batterie-/USB-Statusüberwachung
+  // 6. Deep-Sleep zwischen Messungen
 
   /***************************************************
    VERY IMPORTANT:
@@ -1123,7 +1101,7 @@ static String base64Encode(const String& input) {
 // =====================================================================
 #if USE_API
 void sendToAPI() {
-  // JSON-Payload aufbauen (identisch mit MQTT-Payload)
+  // JSON-Payload aufbauen
   JsonDocument jsonDoc;
   jsonDoc["station_name"]    = cfg.station_name;
   jsonDoc["temperature"]      = adjusted_temp;          // BME280 Umgebungstemperatur
