@@ -119,7 +119,7 @@
 #include "FS.h"
 #include <EasyNTPClient.h>          // https://github.com/aharshac/EasyNTPClient
 #include <TimeLib.h>                // https://github.com/PaulStoffregen/Time.git
-#include <PubSubClient.h>           // For MQTT (in this case publishing only)
+// PubSubClient (MQTT) wurde entfernt – Station arbeitet ausschließlich mit REST-API
 
 // =====================================================================
 // Laufzeit-Konfiguration (geladen aus EEPROM, Fallback: CFG_DEFAULT_*)
@@ -128,15 +128,6 @@ struct StationConfig {
   char  station_name[64];
   char  wifi_ssid[64];
   char  wifi_pass[64];
-  // MQTT
-  bool  mqtt_enabled;
-  char  mqtt_server[64];
-  int   mqtt_port;
-  char  mqtt_user[32];
-  char  mqtt_pass[32];
-  char  mqtt_topic[80];
-  char  mqtt_press_topic[80];
-  char  mqtt_status[80];
   // REST-API
   bool  api_enabled;
   bool  api_https;
@@ -163,14 +154,6 @@ static void applyDefaults() {
   strlcpy(cfg.station_name,     CFG_DEFAULT_STATION_NAME,     sizeof(cfg.station_name));
   strlcpy(cfg.wifi_ssid,        CFG_DEFAULT_WIFI_SSID,        sizeof(cfg.wifi_ssid));
   strlcpy(cfg.wifi_pass,        CFG_DEFAULT_WIFI_PASS,        sizeof(cfg.wifi_pass));
-  cfg.mqtt_enabled = CFG_DEFAULT_MQTT_ENABLED;
-  strlcpy(cfg.mqtt_server,      CFG_DEFAULT_MQTT_SERVER,      sizeof(cfg.mqtt_server));
-  cfg.mqtt_port    = CFG_DEFAULT_MQTT_PORT;
-  strlcpy(cfg.mqtt_user,        CFG_DEFAULT_MQTT_USER,        sizeof(cfg.mqtt_user));
-  strlcpy(cfg.mqtt_pass,        CFG_DEFAULT_MQTT_PASS,        sizeof(cfg.mqtt_pass));
-  strlcpy(cfg.mqtt_topic,       CFG_DEFAULT_MQTT_TOPIC,       sizeof(cfg.mqtt_topic));
-  strlcpy(cfg.mqtt_press_topic, CFG_DEFAULT_MQTT_PRESS_TOPIC, sizeof(cfg.mqtt_press_topic));
-  strlcpy(cfg.mqtt_status,      CFG_DEFAULT_MQTT_STATUS,      sizeof(cfg.mqtt_status));
   cfg.api_enabled  = CFG_DEFAULT_API_ENABLED;
   cfg.api_https    = CFG_DEFAULT_API_HTTPS;
   strlcpy(cfg.api_host,         CFG_DEFAULT_API_HOST,         sizeof(cfg.api_host));
@@ -214,14 +197,6 @@ void loadConfig() {
   if (doc["station_name"].is<const char*>())     strlcpy(cfg.station_name,     doc["station_name"],     sizeof(cfg.station_name));
   if (doc["wifi_ssid"].is<const char*>())        strlcpy(cfg.wifi_ssid,        doc["wifi_ssid"],        sizeof(cfg.wifi_ssid));
   if (doc["wifi_pass"].is<const char*>())        strlcpy(cfg.wifi_pass,        doc["wifi_pass"],        sizeof(cfg.wifi_pass));
-  if (!doc["mqtt_enabled"].isNull())             cfg.mqtt_enabled = doc["mqtt_enabled"];
-  if (doc["mqtt_server"].is<const char*>())      strlcpy(cfg.mqtt_server,      doc["mqtt_server"],      sizeof(cfg.mqtt_server));
-  if (!doc["mqtt_port"].isNull())                cfg.mqtt_port    = doc["mqtt_port"];
-  if (doc["mqtt_user"].is<const char*>())        strlcpy(cfg.mqtt_user,        doc["mqtt_user"],        sizeof(cfg.mqtt_user));
-  if (doc["mqtt_pass"].is<const char*>())        strlcpy(cfg.mqtt_pass,        doc["mqtt_pass"],        sizeof(cfg.mqtt_pass));
-  if (doc["mqtt_topic"].is<const char*>())       strlcpy(cfg.mqtt_topic,       doc["mqtt_topic"],       sizeof(cfg.mqtt_topic));
-  if (doc["mqtt_press_topic"].is<const char*>()) strlcpy(cfg.mqtt_press_topic, doc["mqtt_press_topic"], sizeof(cfg.mqtt_press_topic));
-  if (doc["mqtt_status"].is<const char*>())      strlcpy(cfg.mqtt_status,      doc["mqtt_status"],      sizeof(cfg.mqtt_status));
   if (!doc["api_enabled"].isNull())              cfg.api_enabled  = doc["api_enabled"];
   if (!doc["api_https"].isNull())                cfg.api_https    = doc["api_https"];
   if (doc["api_host"].is<const char*>())         strlcpy(cfg.api_host,         doc["api_host"],         sizeof(cfg.api_host));
@@ -241,14 +216,6 @@ void saveConfig() {
   doc["station_name"]     = cfg.station_name;
   doc["wifi_ssid"]        = cfg.wifi_ssid;
   doc["wifi_pass"]        = cfg.wifi_pass;
-  doc["mqtt_enabled"]     = cfg.mqtt_enabled;
-  doc["mqtt_server"]      = cfg.mqtt_server;
-  doc["mqtt_port"]        = cfg.mqtt_port;
-  doc["mqtt_user"]        = cfg.mqtt_user;
-  doc["mqtt_pass"]        = cfg.mqtt_pass;
-  doc["mqtt_topic"]       = cfg.mqtt_topic;
-  doc["mqtt_press_topic"] = cfg.mqtt_press_topic;
-  doc["mqtt_status"]      = cfg.mqtt_status;
   doc["api_enabled"]      = cfg.api_enabled;
   doc["api_https"]        = cfg.api_https;
   doc["api_host"]         = cfg.api_host;
@@ -324,10 +291,7 @@ int pressure_idx;                   // Index into LANG_PRESSURE[] (0..4)
 inline const char* trend_in_words()    { return LANG_TRENDS[trend_idx]; }
 inline const char* pressure_in_words() { return LANG_PRESSURE[pressure_idx]; }
 
-// MQTT receive flag (set by callback when retained pressure curve arrives)
-volatile bool mqtt_data_received = false;
-
-// Trend index constants (used with LANG_TRENDS[])
+// Trend index
 #define TREND_RISING_FAST   0
 #define TREND_RISING        1
 #define TREND_RISING_SLOW   2
@@ -343,8 +307,7 @@ volatile bool mqtt_data_received = false;
 #define PRESS_HIGH          3
 #define PRESS_STRONG_HIGH   4
 
-WiFiClient espClient;               // MQTT
-PubSubClient client(espClient);     // MQTT
+
 
 // =====================================================================
 // Konfigurations-Portal
@@ -427,16 +390,6 @@ void startConfigPortal() {
     html += field("WLAN SSID", "wifi_ssid", cfg.wifi_ssid);
     html += field("WLAN Passwort", "wifi_pass", cfg.wifi_pass, 64);
 
-    html += "</table><h2>MQTT</h2><table>";
-    html += fieldCheck("MQTT aktiv", "mqtt_enabled", cfg.mqtt_enabled);
-    html += field("Broker", "mqtt_server", cfg.mqtt_server);
-    html += fieldInt("Port", "mqtt_port", cfg.mqtt_port);
-    html += field("Benutzer", "mqtt_user", cfg.mqtt_user, 32);
-    html += field("Passwort", "mqtt_pass", cfg.mqtt_pass, 32);
-    html += field("Topic", "mqtt_topic", cfg.mqtt_topic, 80);
-    html += field("Druck-Topic", "mqtt_press_topic", cfg.mqtt_press_topic, 80);
-    html += field("Status-Topic", "mqtt_status", cfg.mqtt_status, 80);
-
     html += "</table><h2>REST-API</h2><table>";
     html += fieldCheck("API aktiv", "api_enabled", cfg.api_enabled);
     html += fieldCheck("HTTPS", "api_https", cfg.api_https);
@@ -468,14 +421,6 @@ void startConfigPortal() {
     strlcpy(cfg.station_name,     get("station_name",    cfg.station_name).c_str(),     sizeof(cfg.station_name));
     strlcpy(cfg.wifi_ssid,        get("wifi_ssid",       cfg.wifi_ssid).c_str(),         sizeof(cfg.wifi_ssid));
     strlcpy(cfg.wifi_pass,        get("wifi_pass",       cfg.wifi_pass).c_str(),         sizeof(cfg.wifi_pass));
-    cfg.mqtt_enabled = server.hasArg("mqtt_enabled");
-    strlcpy(cfg.mqtt_server,      get("mqtt_server",     cfg.mqtt_server).c_str(),       sizeof(cfg.mqtt_server));
-    cfg.mqtt_port    = get("mqtt_port",     String(cfg.mqtt_port).c_str()).toInt();
-    strlcpy(cfg.mqtt_user,        get("mqtt_user",       cfg.mqtt_user).c_str(),         sizeof(cfg.mqtt_user));
-    strlcpy(cfg.mqtt_pass,        get("mqtt_pass",       cfg.mqtt_pass).c_str(),         sizeof(cfg.mqtt_pass));
-    strlcpy(cfg.mqtt_topic,       get("mqtt_topic",      cfg.mqtt_topic).c_str(),        sizeof(cfg.mqtt_topic));
-    strlcpy(cfg.mqtt_press_topic, get("mqtt_press_topic",cfg.mqtt_press_topic).c_str(), sizeof(cfg.mqtt_press_topic));
-    strlcpy(cfg.mqtt_status,      get("mqtt_status",     cfg.mqtt_status).c_str(),       sizeof(cfg.mqtt_status));
     cfg.api_enabled  = server.hasArg("api_enabled");
     cfg.api_https    = server.hasArg("api_https");
     strlcpy(cfg.api_host,         get("api_host",  cfg.api_host).c_str(),  sizeof(cfg.api_host));
@@ -549,9 +494,7 @@ void setup() {
   Serial.print("Language: ");
   Serial.println(LANG_NAME);
 
-  client.setBufferSize(640);       // Increasing PubSubClient
-
-  //******Battery Voltage Monitoring (first thing to do: is battery still ok?)***********
+  //******Battery
   // FIX v2.6: averaged over 16 ADC reads to reduce ESP8266 ADC noise.
 
   // Voltage divider R1 = 220k+100k+220k =540k and R2=100k
@@ -597,19 +540,11 @@ void setup() {
   }
   Serial.println(" Wifi connected ok");
 
-  if (cfg.mqtt_enabled) connect_to_MQTT();  // connecting to MQTT broker
-
-  else {
-
-    Serial.println("SPIFFS Initialization: (First time run can last up to 30 sec - be patient)");
-
-    boolean mounted = SPIFFS.begin();               // load config if it exists. Otherwise use defaults.
-    if (!mounted) {
-      Serial.println("FS not formatted. Doing that now... (can last up to 30 sec).");
-      SPIFFS.format();
-      Serial.println("FS formatted...");
-      SPIFFS.begin();
-    }
+  Serial.println("SPIFFS Initialisierung...");
+  if (!SPIFFS.begin()) {
+    Serial.println("SPIFFS nicht formatiert – wird formatiert (bis zu 30 s)...");
+    SPIFFS.format();
+    SPIFFS.begin();
   }
 
   //******** GETTING THE TIME FROM NTP SERVER  ***********************************
@@ -671,8 +606,7 @@ void setup() {
 
 measurementEvent();             // calling function to get all data from the different sensors
 
-  if (cfg.mqtt_enabled) ReadFromMQTT();       // reading timestamp, accuracy and pressure curve
-  else ReadFromSPIFFS();
+  ReadFromSPIFFS();
 
   Serial.print("Timestamp difference: ");
   Serial.println(current_timestamp - saved_timestamp);
@@ -692,8 +626,7 @@ measurementEvent();             // calling function to get all data from the dif
       accuracy = accuracy + 1;
     }
 
-    if (cfg.mqtt_enabled) WriteToMQTT();
-    else WriteToSPIFFS(current_timestamp);
+    WriteToSPIFFS(current_timestamp);
   }
 
   //**************************Calculate Zambretti Forecast*******************************************
@@ -722,40 +655,7 @@ measurementEvent();             // calling function to get all data from the dif
   }
   Serial.println("********************************************************");
 
-  // *********** code block for publishing all data to MQTT ****************************
-  if (cfg.mqtt_enabled) {
-    JsonDocument jsonDoc;
-
-    jsonDoc["temperature"] = adjusted_temp;         // BME280 Umgebungstemperatur
-    if (pool_temp > -87) jsonDoc["pool_temperature"] = pool_temp;  // DS18B20 Pooltemperatur (nur wenn Sensor vorhanden)
-    jsonDoc["humidity"] = adjusted_humi;
-    jsonDoc["dewpoint"] = DewpointTemperature;
-    jsonDoc["relativepressure"] = rel_pressure_rounded;
-    jsonDoc["pressurestate"] = pressure_in_words();
-    jsonDoc["battery"] = volt;
-    jsonDoc["batterypercentage"] = batterypercentage;
-    jsonDoc["absolutepressure"] = measured_pres;
-    jsonDoc["heatindex"] = HeatIndex;
-    jsonDoc["accuracy"] = accuracy_in_percent;
-    jsonDoc["dewpointspread"] = DewPointSpread;
-    jsonDoc["zambrettisays"] = ZambrettisWords;
-    jsonDoc["trendinwords"] = trend_in_words();
-    jsonDoc["trend"] = pressure_difference[11];
-    jsonDoc["zletter"] = String(z_letter);
-    jsonDoc["wifi_strength"] = int(WiFi.RSSI());
-    jsonDoc["timestamp"] = current_timestamp;
-
-    char jsonBuffer[640];
-    serializeJson(jsonDoc, jsonBuffer);
-
-    Serial.print("Data MQTT message: ");
-    Serial.println(jsonBuffer);
-
-    client.publish(cfg.mqtt_topic, jsonBuffer, 1);   // , 1 = retained
-    delay(50);
-  }
-
-#if USE_API
+  #if USE_API
   if (cfg.api_enabled) sendToAPI();   // Messdaten zusätzlich an PHP/MySQL-API senden
 #endif
 
@@ -1138,125 +1038,27 @@ void FirstTimeRun() {
   for (int b = 0; b < 12; b++) {
     pressure_value[b] = rel_pressure_rounded;               // Filling pressure array with current pressure
   }
-  if (cfg.mqtt_enabled) WriteToMQTT();
-  else {
-    Serial.println("---> Starting SPIFFS initializing process.");
+  Serial.println("---> Initialisiere SPIFFS-Druckverlauf.");
 
-    char filename [] = "/data.txt";
-    File myDataFile = SPIFFS.open(filename, "w");            // Open a file for writing
-    if (!myDataFile) {
-      Serial.println("Failed to open file");
-      Serial.println("Stopping process - maybe flash size not set (to SPIFFS).");
-      goToSleep(60);    // FIX v2.6: was exit(0); that left WiFi active and drained the battery.
-      return;
-    }
-    myDataFile.println(current_timestamp);                   // Saving timestamp to /data.txt
-    myDataFile.println(accuracy);                            // Saving accuracy value to /data.txt
-    for ( int i = 0; i < 12; i++) {
-      myDataFile.println(rel_pressure_rounded);              // Storing pressure array with current pressure
-    }
-    Serial.println("** Saved initial pressure data. **");
-    myDataFile.close();
-    Serial.println("---> Doing a reset now.");
-    ESP.restart();                                            // FIX v2.6: cleaner than jump to addr 0
+  char filename [] = "/data.txt";
+  File myDataFile = SPIFFS.open(filename, "w");
+  if (!myDataFile) {
+    Serial.println("SPIFFS: Datei konnte nicht geöffnet werden – prüfe Flash-Größe.");
+    goToSleep(60);
+    return;
   }
+  myDataFile.println(current_timestamp);
+  myDataFile.println(accuracy);
+  for (int i = 0; i < 12; i++) {
+    myDataFile.println(rel_pressure_rounded);
+  }
+  Serial.println("** Druckverlauf initialisiert. **");
+  myDataFile.close();
+  Serial.println("---> Neustart.");
+  ESP.restart();
 }
 
-void connect_to_MQTT() {
-  Serial.print("---> Connecting to MQTT");
-  client.setServer(cfg.mqtt_server, cfg.mqtt_port);
-  client.setCallback(callback);
 
-  if (!client.connected()) {
-    reconnect();
-  }
-} //end connect_to_MQTT
-
-void reconnect() {
-  // FIX v2.6: retry up to 3 times before giving up.
-  int attempts = 0;
-  while (!client.connected() && attempts < 3) {
-    Serial.print("..attempting MQTT connection (try ");
-    Serial.print(attempts + 1);
-    Serial.print("/3) with ");
-    String clientId = "ESP8266Client-";
-    clientId += String(random(0xffff), HEX);
-    Serial.println(clientId.c_str());
-
-    if (client.connect(clientId.c_str(), cfg.mqtt_user, cfg.mqtt_pass)) {
-      Serial.println("MQTT is connected");
-      char tmp[128];
-      String statusmessage =  String(cfg.station_name) + ", " + Version + ": client started";
-      statusmessage.toCharArray(tmp, 128);
-      client.publish(cfg.mqtt_status, tmp);
-
-      // Subscribe to pressure topic
-      client.subscribe(cfg.mqtt_press_topic);
-      delay(50);
-      return;
-    } else {
-      Serial.print(" ...failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" retrying...");
-      delay(1000);
-      attempts++;
-    }
-  }
-  Serial.println("MQTT failed after 3 attempts - data this cycle may be lost.");
-} //end void reconnect
-
-void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Message arrived on topic: ");
-  Serial.print(topic);
-  Serial.print(": containing: ");
-
-  // print received message raw to serial monitor
-  String messageTemp;
-  for (int i = 0; i < length; i++) {
-    Serial.print((char)payload[i]);
-    messageTemp += (char)payload[i];
-  }
-  Serial.println();
-
-  if (String(topic) == cfg.mqtt_press_topic) {
-
-    JsonDocument inDoc;
-
-    DeserializationError err = deserializeJson(inDoc, payload, length);
-    if (err) {
-      Serial.print("deserializeJson() failed with code ");
-      Serial.println(err.f_str());
-      return;
-    }
-
-    for (int a = 0; a < 12; a++) {
-      pressure_value[a] = inDoc["pressurecurve"][String(a)];
-    }
-    accuracy = inDoc["pressurecurve"]["accuracy"];
-    saved_timestamp = inDoc["pressurecurve"]["datatime"];
-
-    mqtt_data_received = true;          // FIX v2.6: signal successful receipt
-  }
-
-} // end void callback()
-
-void ReadFromMQTT() {
-  // FIX v2.6: wait for actual message arrival (with 5s timeout) instead of
-  // a blind 1s loop. Prevents ghost-FirstTimeRun() that wipes the 6h curve.
-  Serial.println("Waiting for retained MQTT pressure curve...");
-  unsigned long start = millis();
-  while (!mqtt_data_received && (millis() - start < 5000)) {
-    client.loop();
-    delay(10);
-  }
-  if (!mqtt_data_received) {
-    Serial.println("WARNING: No MQTT pressure curve received within 5s.");
-    Serial.println("Skipping pressure-curve update for this cycle to preserve last known state.");
-    saved_timestamp = current_timestamp;
-  } else {
-    Serial.println("MQTT pressure curve received.");
-  }
-} // end of ReadFromMQTT()
 
 #if USE_DS18B20
 float getTemperature() {
@@ -1283,26 +1085,7 @@ float getTemperature() {
 }
 #endif
 
-void WriteToMQTT() {     // Write the pressure data to MQTT instead to SPIFFS (because of finite lifespan of Flash memory)
 
-  JsonDocument pressureDoc;
-
-  pressureDoc["pressurecurve"]["datatime"] = current_timestamp;
-  pressureDoc["pressurecurve"]["accuracy"] = accuracy;
-
-  for (int i = 0; i < 12; i++) {
-    pressureDoc["pressurecurve"][String(i)] = pressure_value[i];
-  }
-
-  char p_buffer[640];
-  serializeJson(pressureDoc, p_buffer);
-
-  Serial.print("Outgoing pressure MQTT message: ");
-  Serial.println(p_buffer);
-
-  client.publish(cfg.mqtt_press_topic, p_buffer, 1);   // , 1 = retained
-  delay(50);
-}
 
 // =====================================================================
 // Base64-Enkodierung (minimal, für HTTP Basic Auth)
@@ -1414,31 +1197,18 @@ void sendToAPI() {
 #endif  // USE_API
 
 void goToSleep(unsigned int sleepmin) {
-  // FIX v2.6: only publish status if MQTT is actually connected.
-  if (cfg.mqtt_enabled && client.connected()) {
-    char tmp[128];
-    String sleepmessage =  String(cfg.station_name) + ", " + Version + ": Taking a nap for " + String(sleepmin) + " Minutes";
-    sleepmessage.toCharArray(tmp, 128);
-    client.publish(cfg.mqtt_status, tmp);
-    delay(50);
-
-    Serial.println("INFO: Closing the MQTT connection");
-    client.disconnect();
-  }
-
   Serial.println("INFO: Closing the Wifi connection");
   WiFi.disconnect();
 
   unsigned long shutdown_start = millis();
-  while ((client.connected() || (WiFi.status() == WL_CONNECTED)) && (millis() - shutdown_start < 2000)) {
-    Serial.println("Waiting for shutdown before sleeping");
+  while (WiFi.status() == WL_CONNECTED && millis() - shutdown_start < 2000) {
     delay(10);
   }
   delay(50);
 
-  Serial.print ("Going to sleep now for ");
-  Serial.print (sleepmin);
-  Serial.print (" Minute(s).");
+  Serial.print("Going to sleep now for ");
+  Serial.print(sleepmin);
+  Serial.println(" Minute(s).");
 
-  ESP.deepSleep(sleepmin * 60 * 1000000); // convert to microseconds
+  ESP.deepSleep(sleepmin * 60UL * 1000000UL);
 } // end of goToSleep()

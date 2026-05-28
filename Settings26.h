@@ -67,18 +67,7 @@ const String Version = "2.7";
 #define CFG_DEFAULT_WIFI_SSID     "YOUR_SSID"
 #define CFG_DEFAULT_WIFI_PASS     "YOUR_PASSWORD"
 
-/****** MQTT Settings (Compile-Zeit-Fallbacks) *****************************/
-
-#define CFG_DEFAULT_MQTT_ENABLED      true
-#define CFG_DEFAULT_MQTT_SERVER       "broker.hivemq.com"
-#define CFG_DEFAULT_MQTT_PORT         1883
-#define CFG_DEFAULT_MQTT_USER         ""
-#define CFG_DEFAULT_MQTT_PASS         ""
-#define CFG_DEFAULT_MQTT_TOPIC        "YOUR_TOPIC"
-#define CFG_DEFAULT_MQTT_PRESS_TOPIC  "YOUR_TOPIC/pressure"
-#define CFG_DEFAULT_MQTT_STATUS       "YOUR_TOPIC/status"
-
-/****** REST-API Settings (Compile-Zeit-Fallbacks) **************************/
+/****** REST-API Settings ***************************************************/
 #define USE_API 1                         // REST-API-Upload aktivieren
 
 #define CFG_DEFAULT_API_ENABLED   true
