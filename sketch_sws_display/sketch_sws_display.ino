@@ -69,7 +69,12 @@ DisplayConfig cfg;
 #define HARDWARE_TYPE MD_MAX72XX::FC16_HW
 
 // ------ Globale Objekte --------------------------------------
-MD_Parola display = MD_Parola(HARDWARE_TYPE, DISPLAY_CS_PIN, NUM_DEVICES);
+MD_Parola  display(HARDWARE_TYPE, DISPLAY_CS_PIN, NUM_DEVICES);
+MD_MAX72XX mx(HARDWARE_TYPE, DISPLAY_CS_PIN, NUM_DEVICES);  // direkter LED-Zugriff
+
+// ------ Statusflags ------------------------------------------
+static bool errorWifi = false;
+static bool errorApi  = false;
 
 // ------ DHT22 (Innenraumsensor) ------------------------------
 static DHT dht(DHT_PIN, DHT_TYPE);
@@ -412,47 +417,47 @@ static void buildScrollText(const JsonDocument& doc, char* out, size_t outLen) {
 static void fetchData() {
     Serial.println(F("API-Abruf..."));
 
-    if (cfg.api_https) {
-        WiFiClientSecure client;
-        client.setInsecure();   // Zertifikat nicht prüfen (ESP8266-Limitation)
-        HTTPClient http;
-        String url = String("https://") + cfg.api_host + cfg.api_path;
-        http.begin(client, url);
-        http.setTimeout(8000);
+    if (WiFi.status() != WL_CONNECTED) {
+        errorWifi = true;
+        errorApi  = true;
+        Serial.println(F("Kein WLAN"));
+        return;
+    }
+    errorWifi = false;
+
+    auto handleResponse = [](HTTPClient& http) {
         int code = http.GET();
         if (code == HTTP_CODE_OK) {
             StaticJsonDocument<1024> doc;
             if (deserializeJson(doc, http.getStream()) == DeserializationError::Ok) {
                 buildScrollText(doc, pendingText, sizeof(pendingText));
                 newDataReady = true;
+                errorApi = false;
                 Serial.println(F("Daten aktualisiert."));
             } else {
+                errorApi = true;
                 Serial.println(F("JSON-Fehler"));
             }
         } else {
+            errorApi = true;
             Serial.printf("HTTP-Fehler: %d\n", code);
         }
         http.end();
+    };
+
+    if (cfg.api_https) {
+        WiFiClientSecure client;
+        client.setInsecure();
+        HTTPClient http;
+        http.begin(client, String("https://") + cfg.api_host + cfg.api_path);
+        http.setTimeout(8000);
+        handleResponse(http);
     } else {
         WiFiClient client;
         HTTPClient http;
-        String url = String("http://") + cfg.api_host + cfg.api_path;
-        http.begin(client, url);
+        http.begin(client, String("http://") + cfg.api_host + cfg.api_path);
         http.setTimeout(8000);
-        int code = http.GET();
-        if (code == HTTP_CODE_OK) {
-            StaticJsonDocument<1024> doc;
-            if (deserializeJson(doc, http.getStream()) == DeserializationError::Ok) {
-                buildScrollText(doc, pendingText, sizeof(pendingText));
-                newDataReady = true;
-                Serial.println(F("Daten aktualisiert."));
-            } else {
-                Serial.println(F("JSON-Fehler"));
-            }
-        } else {
-            Serial.printf("HTTP-Fehler: %d\n", code);
-        }
-        http.end();
+        handleResponse(http);
     }
 }
 
@@ -518,14 +523,14 @@ void setup() {
 
     // NTP starten
     ntpClient.setPoolServerName(CFG_DEFAULT_NTP_SERVER);
-    ntpClient.setTimeOffset(cfg.ntp_offset);
     ntpClient.begin();
+    ntpClient.setTimeOffset(cfg.ntp_offset);  // nach begin(), sonst wird Offset zurückgesetzt
     // Auf erste gültige Zeit warten (max. 5 s)
     {
         unsigned long t = millis();
         while (!ntpClient.update() && millis() - t < 5000) { delay(100); yield(); }
     }
-    Serial.printf("NTP: %s\n", ntpClient.getFormattedTime().c_str());
+    Serial.printf("NTP: %s (Offset %lds)\n", ntpClient.getFormattedTime().c_str(), cfg.ntp_offset);
 
     // Erster API-Abruf
     strncpy(scrollText, "Lade Daten...", sizeof(scrollText));
@@ -534,6 +539,10 @@ void setup() {
     if (newDataReady) {
         strncpy(scrollText, pendingText, sizeof(scrollText));
         newDataReady = false;
+    } else {
+        // Kein Abruf möglich – Platzhalter damit Scrolltext nicht leer ist
+        strncpy(scrollText, "Keine Daten", sizeof(scrollText));
+        strncpy(pendingText, scrollText, sizeof(pendingText));
     }
     lastFetch = millis();
 
@@ -626,6 +635,19 @@ void loop() {
             scrollDone   = false;
             Serial.println(F("Modus: Uhr"));
         }
+    }
+
+    // ---- LED-Statusanzeige ----
+    // Unterste Zeile Matrix 0 (links)  = WLAN-Fehler
+    // Unterste Zeile Matrix 3 (rechts) = API-Fehler
+    static bool lastErrorWifi = false;
+    static bool lastErrorApi  = false;
+    if (errorWifi != lastErrorWifi || errorApi != lastErrorApi) {
+        lastErrorWifi = errorWifi;
+        lastErrorApi  = errorApi;
+        mx.begin();
+        mx.setRow(0, 7, errorWifi ? 0xFF : 0x00);  // WLAN-Fehler: erste Matrix
+        mx.setRow(3, 7, errorApi  ? 0xFF : 0x00);  // API-Fehler:  letzte Matrix
     }
 }
 
