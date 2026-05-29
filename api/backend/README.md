@@ -27,8 +27,7 @@ Läuft direkt auf one.com Shared Hosting (PHP 8 + MySQL).
    - **Projekteinstellungen → Service-Konten → Neuen privaten Schlüssel generieren**
    - Heruntergeladene JSON-Datei als `firebase_service_account.json` nach `sws/api/` hochladen  
      (eine Ebene oberhalb von `backend/`, per `.htaccess` geschützt)
-   - In `push.php` `FCM_PROJECT_ID` auf die Firebase-Projekt-ID setzen  
-     (steht in der JSON unter `"project_id"`)
+   - Die `project_id` wird automatisch aus der JSON gelesen – kein manuelles Eintragen nötig
 
 ## API-Endpunkte
 

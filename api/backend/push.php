@@ -33,9 +33,13 @@ require_once __DIR__ . '/jwt.php';
 
 // ── Konfiguration ──────────────────────────────────────────────────────────
 // Pfad zur Service-Account-JSON (eine Ebene oberhalb von api/backend/)
-define('FCM_SA_FILE',    __DIR__ . '/../firebase_service_account.json');
-// Project-ID aus Firebase-Konsole → Projekteinstellungen → Allgemein
-define('FCM_PROJECT_ID', 'DEIN_FIREBASE_PROJECT_ID');
+define('FCM_SA_FILE', __DIR__ . '/../firebase_service_account.json');
+// Project-ID wird automatisch aus der JSON gelesen – kein manuelles Eintragen nötig
+define('FCM_PROJECT_ID', (function () {
+    if (!file_exists(FCM_SA_FILE)) return '';
+    $sa = json_decode(file_get_contents(FCM_SA_FILE), true);
+    return $sa['project_id'] ?? '';
+})());
 // ──────────────────────────────────────────────────────────────────────────
 
 function jsonOut(int $code, array $data): void
