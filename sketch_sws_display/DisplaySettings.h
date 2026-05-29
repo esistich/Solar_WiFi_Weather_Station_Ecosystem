@@ -39,7 +39,12 @@
 #define CFG_DEFAULT_INTENSITY_MIN   1     // Helligkeit bei Dunkelheit (0–15)
 #define CFG_DEFAULT_INTENSITY_MAX  12     // Helligkeit bei hellem Licht (0–15)
 
-#define CFG_DEFAULT_SCROLL_MS      40     // ms pro Scroll-Schritt
+// ------ DHT22 (Innenraumsensor) -----------------------------
+// D2 (GPIO4) – Temperatur + Luftfeuchte im Display-Gehäuse
+#define DHT_PIN             4
+#define DHT_TYPE            DHT22
+
+#define CFG_DEFAULT_SCROLL_MS
 
 // ------ NTP -------------------------------------------------
 #define CFG_DEFAULT_NTP_SERVER  "pool.ntp.org"

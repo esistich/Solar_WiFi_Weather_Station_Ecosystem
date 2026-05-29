@@ -40,6 +40,7 @@
 #include <MD_Parola.h>
 #include <MD_MAX72xx.h>
 #include <SPI.h>
+#include <DHT.h>
 
 #include "DisplaySettings.h"
 
@@ -69,6 +70,11 @@ DisplayConfig cfg;
 
 // ------ Globale Objekte --------------------------------------
 MD_Parola display = MD_Parola(HARDWARE_TYPE, DISPLAY_CS_PIN, NUM_DEVICES);
+
+// ------ DHT22 (Innenraumsensor) ------------------------------
+static DHT dht(DHT_PIN, DHT_TYPE);
+static float indoorTemp = NAN;
+static float indoorHum  = NAN;
 
 // ------ NTP --------------------------------------------------
 static WiFiUDP     ntpUdp;
@@ -340,6 +346,19 @@ static void buildScrollText(const JsonDocument& doc, char* out, size_t outLen) {
 
     out[0] = '\0';
 
+    // Innenraumsensor DHT22
+    if (!isnan(indoorTemp)) {
+        strncat(out, "Innen:", outLen - strlen(out) - 1);
+        dtostrf(indoorTemp, 1, 1, tmp);
+        strncat(out, tmp, outLen - strlen(out) - 1);
+        strncat(out, "\xB0""C ", outLen - strlen(out) - 1);
+        if (!isnan(indoorHum)) {
+            dtostrf(indoorHum, 1, 0, tmp);
+            strncat(out, tmp, outLen - strlen(out) - 1);
+            strncat(out, "%  ", outLen - strlen(out) - 1);
+        }
+    }
+
     // Zeitstempel des letzten Messwertes
     if (strlen(ts) > 0) {
         // ts ist i.d.R. "YYYY-MM-DD HH:MM:SS" – wir zeigen nur HH:MM
@@ -450,6 +469,9 @@ void setup() {
     // Konfiguration aus EEPROM laden
     loadConfig();
 
+    // DHT22 starten
+    dht.begin();
+
     // Display initialisieren
     pinMode(LDR_PIN, INPUT);
     display.begin();
@@ -533,6 +555,16 @@ void loop() {
         int raw    = analogRead(LDR_PIN);
         int bright = map(raw, 0, 1023, cfg.intensity_min, cfg.intensity_max);
         display.setIntensity(constrain(bright, 0, 15));
+    }
+
+    // DHT22: alle 5 Sekunden auslesen
+    static unsigned long lastDht = 0;
+    if (millis() - lastDht >= 5000UL) {
+        lastDht = millis();
+        float t = dht.readTemperature();
+        float h = dht.readHumidity();
+        if (!isnan(t)) indoorTemp = t;
+        if (!isnan(h)) indoorHum  = h;
     }
 
     // Periodischer API-Abruf (im Hintergrund, blockiert Anzeige nicht)
