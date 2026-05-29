@@ -598,8 +598,12 @@ static void updateProgressBar(unsigned long elapsedMs, unsigned long totalMs) {
     mx.setRow(2, 7, row2);
 }
 
+// =============================================================
+//  loop()
+// =============================================================
+void loop() {
 
-    // Config-Button (D3/GPIO0): 2 Sekunden gedrückt halten -> Config-Portal
+    // Config-Button
     static unsigned long btnPressedMs = 0;
     if (digitalRead(CONFIG_BUTTON_PIN) == LOW) {
         if (btnPressedMs == 0) btnPressedMs = millis();
