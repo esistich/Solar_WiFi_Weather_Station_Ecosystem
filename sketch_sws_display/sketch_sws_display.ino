@@ -357,7 +357,7 @@ static void buildScrollText(const JsonDocument& doc, char* out, size_t outLen) {
         strncat(out, "h  ", outLen - strlen(out) - 1);
     }
 
-    strncat(out, "Luft:", outLen - strlen(out) - 1);
+    strncat(out, "Aussen:", outLen - strlen(out) - 1);
     dtostrf(temp, 1, 1, tmp);
     strncat(out, tmp, outLen - strlen(out) - 1);
     strncat(out, "\xB0""C  ", outLen - strlen(out) - 1);
