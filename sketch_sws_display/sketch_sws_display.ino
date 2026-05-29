@@ -581,10 +581,11 @@ static void updateProgressBar(unsigned long elapsedMs, unsigned long totalMs) {
     uint8_t lit = (uint8_t)((elapsedMs * 16UL) / totalMs);
     if (lit > 16) lit = 16;
 
-    // FC16_HW: Modul 3 = links (erster im Datenstrom), Modul 0 = rechts
-    // Progressbar laeuft von links nach rechts: erst Modul 3, dann Modul 2
-    uint8_t rowL = 0x00;  // Modul 3 (ganz links)
-    uint8_t rowR = 0x00;  // Modul 2 (mittig-links)
+    // FC16_HW: Modul 2 = mittig-links, Modul 1 = mittig-rechts
+    // Modul 3 (links) und Modul 0 (rechts) sind fuer Fehler-LEDs reserviert
+    // Progressbar laeuft von links (Modul 2, MSB) nach rechts (Modul 1, LSB)
+    uint8_t rowL = 0x00;  // Modul 2
+    uint8_t rowR = 0x00;  // Modul 1
     if (lit >= 8) {
         rowL = 0xFF;
     } else if (lit > 0) {
@@ -595,8 +596,8 @@ static void updateProgressBar(unsigned long elapsedMs, unsigned long totalMs) {
         rowR = (uint8_t)(0xFF << (8 - rest));
     }
 
-    mx.setRow(3, 7, rowL);
-    mx.setRow(2, 7, rowR);
+    mx.setRow(2, 7, rowL);
+    mx.setRow(1, 7, rowR);
 }
 
 // =============================================================
@@ -683,8 +684,8 @@ void loop() {
             }
             strncat(scrollText, pendingText, sizeof(scrollText) - strlen(scrollText) - 1);
             // Progressbar loeschen
-            mx.setRow(3, 7, 0x00);
             mx.setRow(2, 7, 0x00);
+            mx.setRow(1, 7, 0x00);
             display.displayScroll(scrollText, PA_LEFT, PA_SCROLL_LEFT, cfg.scroll_ms);
             dispState    = STATE_SCROLL;
             stateStartMs = millis();
@@ -703,6 +704,9 @@ void loop() {
             dispState    = STATE_CLOCK;
             stateStartMs = millis();
             scrollDone   = false;
+            // Progressbar zuruecksetzen (startet bei 0)
+            mx.setRow(2, 7, 0x00);
+            mx.setRow(1, 7, 0x00);
             Serial.println(F("Modus: Uhr"));
         }
     }
