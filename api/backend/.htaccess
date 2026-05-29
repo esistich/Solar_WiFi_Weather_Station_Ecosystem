@@ -1,0 +1,11 @@
+# Alle Anfragen an index.php weiterleiten
+<IfModule mod_rewrite.c>
+	RewriteEngine On
+	RewriteCond %{REQUEST_FILENAME} !-f
+	RewriteRule ^ index.php [QSA,L]
+</IfModule>
+
+# jwt.php und db.php vor Direktzugriff schützen
+<FilesMatch "^(jwt|db)\.php$">
+	Require all denied
+</FilesMatch>

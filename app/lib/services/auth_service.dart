@@ -9,8 +9,8 @@ class AuthService extends ChangeNotifier {
   static const _tokenKey = 'auth_token_v1';
   static const _userKey  = 'auth_user_v1';
 
-  // Backend-URL – in der App konfigurierbar (Settings)
-  static const String defaultBackendUrl = 'https://timm-sander.net/sws';
+  // Backend-URL – zeigt auf das PHP-Backend unter /api/backend/
+  static const String defaultBackendUrl = 'https://timm-sander.net/sws/api/backend';
 
   AppUser? _currentUser;
   String _backendUrl = defaultBackendUrl;
@@ -33,7 +33,7 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> login(String email, String password) async {
-	final user = await _post('/auth/login', {
+	final user = await _post('auth', 'login', {
 	  'email': email,
 	  'password': password,
 	});
@@ -41,7 +41,7 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> register(String email, String password) async {
-	final user = await _post('/auth/register', {
+	final user = await _post('auth', 'register', {
 	  'email': email,
 	  'password': password,
 	});
@@ -56,8 +56,10 @@ class AuthService extends ChangeNotifier {
 	notifyListeners();
   }
 
-  Future<AppUser> _post(String path, Map<String, dynamic> body) async {
-	final uri = Uri.parse('$_backendUrl$path');
+  Future<AppUser> _post(String route, String action, Map<String, dynamic> body) async {
+	final uri = Uri.parse('$_backendUrl/index.php').replace(
+	  queryParameters: {'route': route, 'action': action},
+	);
 	final response = await http
 		.post(
 		  uri,
