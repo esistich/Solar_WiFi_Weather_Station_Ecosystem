@@ -326,12 +326,14 @@ static void replaceUmlauts(const char* src, char* dst, size_t dstLen) {
 }
 
 // =============================================================
-//  Uhrzeit-Text aufbauen  (HH:MM)
+//  Uhrzeit-Text aufbauen  (HH:MM / HH MM im Sekundentakt)
 // =============================================================
 static void buildClockText(char* out, size_t outLen) {
     int h = ntpClient.getHours();
     int m = ntpClient.getMinutes();
-    snprintf(out, outLen, "%02d:%02d", h, m);
+    int s = ntpClient.getSeconds();
+    char sep = (s % 2 == 0) ? ':' : ' ';
+    snprintf(out, outLen, "%02d%c%02d", h, sep, m);
 }
 
 // =============================================================
