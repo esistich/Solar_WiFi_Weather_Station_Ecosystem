@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Solar WiFi Weather Station – Display-Sketch
  * ============================================
  * Ruft den letzten Messwert von der REST-API ab und zeigt ihn als
@@ -558,13 +558,13 @@ void setup() {
     display.displayScroll(scrollText, PA_LEFT, PA_SCROLL_LEFT, cfg.scroll_ms);
     fetchData();
     if (newDataReady) {
-        strncpy(scrollText, pendingText, sizeof(scrollText));
         newDataReady = false;
     } else {
-        // Kein Abruf möglich – Platzhalter damit Scrolltext nicht leer ist
-        strncpy(scrollText, "Keine Daten", sizeof(scrollText));
-        strncpy(pendingText, scrollText, sizeof(pendingText));
+        pendingText[0] = '\0';
     }
+    // entfernt
+    // entfernt
+    // entfernt
     lastFetch = millis();
 
     // Start im Uhrmodus
@@ -578,28 +578,25 @@ void setup() {
 //  Fuellt sich waehrend der Uhrphase von links nach rechts.
 // =============================================================
 static void updateProgressBar(unsigned long elapsedMs, unsigned long totalMs) {
-    // 16 LEDs = je 8 in Matrix 1 (mittig-links) und Matrix 2 (mittig-rechts)
     uint8_t lit = (uint8_t)((elapsedMs * 16UL) / totalMs);
     if (lit > 16) lit = 16;
 
-    // Matrix 1: Bits 7..0 von links fuellen
-    uint8_t row1 = 0x00;
+    // FC16_HW: Modul 3 = links (erster im Datenstrom), Modul 0 = rechts
+    // Progressbar laeuft von links nach rechts: erst Modul 3, dann Modul 2
+    uint8_t rowL = 0x00;  // Modul 3 (ganz links)
+    uint8_t rowR = 0x00;  // Modul 2 (mittig-links)
     if (lit >= 8) {
-        row1 = 0xFF;
+        rowL = 0xFF;
     } else if (lit > 0) {
-        // lit Bits von links (MSB) setzen
-        row1 = (uint8_t)(0xFF << (8 - lit));
+        rowL = (uint8_t)(0xFF << (8 - lit));
     }
-
-    // Matrix 2: verbleibende LEDs
-    uint8_t row2 = 0x00;
     if (lit > 8) {
         uint8_t rest = lit - 8;
-        row2 = (uint8_t)(0xFF << (8 - rest));
+        rowR = (uint8_t)(0xFF << (8 - rest));
     }
 
-    mx.setRow(1, 7, row1);
-    mx.setRow(2, 7, row2);
+    mx.setRow(3, 7, rowL);
+    mx.setRow(2, 7, rowR);
 }
 
 // =============================================================
@@ -650,7 +647,8 @@ void loop() {
     // Neue API-Daten merken (werden beim naechsten Scroll-Start mit DHT kombiniert)
     if (newDataReady) {
         newDataReady = false;
-        Serial.println(F("pendingText bereit."));
+        Serial.print(F("pendingText: "));
+        Serial.println(pendingText);
     }
 
     // ---- Zustandsmaschine ----
@@ -685,7 +683,7 @@ void loop() {
             }
             strncat(scrollText, pendingText, sizeof(scrollText) - strlen(scrollText) - 1);
             // Progressbar loeschen
-            mx.setRow(1, 7, 0x00);
+            mx.setRow(3, 7, 0x00);
             mx.setRow(2, 7, 0x00);
             display.displayScroll(scrollText, PA_LEFT, PA_SCROLL_LEFT, cfg.scroll_ms);
             dispState    = STATE_SCROLL;
@@ -717,8 +715,8 @@ void loop() {
     if (errorWifi != lastErrorWifi || errorApi != lastErrorApi) {
         lastErrorWifi = errorWifi;
         lastErrorApi  = errorApi;
-        mx.setRow(0, 7, errorWifi ? 0xFF : 0x00);
-        mx.setRow(3, 7, errorApi  ? 0xFF : 0x00);
+        mx.setRow(3, 7, errorWifi ? 0xFF : 0x00);  // ganz links = WLAN
+        mx.setRow(0, 7, errorApi  ? 0xFF : 0x00);  // ganz rechts = API
     }
 }
 
