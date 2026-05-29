@@ -92,7 +92,8 @@ static unsigned long stateStartMs    = 0;
 static bool          scrollDone      = false;
 
 // ------ Scroll-Puffer ----------------------------------------
-static char scrollText[512];
+static char scrollText[512];   // API-Daten fuer Laufschrift
+static char clockText[12];     // Uhrzeit fuer statische Anzeige
 static char pendingText[512];
 static bool newDataReady    = false;
 static unsigned long lastFetch = 0;
@@ -553,8 +554,8 @@ void setup() {
     lastFetch = millis();
 
     // Start im Uhrmodus
-    buildClockText(scrollText, sizeof(scrollText));
-    display.displayText(scrollText, PA_CENTER, 0, 0, PA_PRINT);
+    buildClockText(clockText, sizeof(clockText));
+    display.displayText(clockText, PA_CENTER, 0, 0, PA_PRINT);
     dispState    = STATE_CLOCK;
     stateStartMs = millis();
 }
@@ -612,12 +613,12 @@ void loop() {
 
     // ---- Zustandsmaschine ----
     if (dispState == STATE_CLOCK) {
-        // Uhrtext jede Sekunde aktualisieren
+        // Uhrtext jede Sekunde aktualisieren (eigener Puffer)
         static unsigned long lastClockUpdate = 0;
         if (millis() - lastClockUpdate >= 1000) {
             lastClockUpdate = millis();
-            buildClockText(scrollText, sizeof(scrollText));
-            display.displayText(scrollText, PA_CENTER, 0, 0, PA_PRINT);
+            buildClockText(clockText, sizeof(clockText));
+            display.displayText(clockText, PA_CENTER, 0, 0, PA_PRINT);
         }
         display.displayAnimate();
 
@@ -635,9 +636,9 @@ void loop() {
             scrollDone = true;
         }
         if (scrollDone) {
-            // Zurück zur Uhr
-            buildClockText(scrollText, sizeof(scrollText));
-            display.displayText(scrollText, PA_CENTER, 0, 0, PA_PRINT);
+            // Zurueck zur Uhr
+            buildClockText(clockText, sizeof(clockText));
+            display.displayText(clockText, PA_CENTER, 0, 0, PA_PRINT);
             dispState    = STATE_CLOCK;
             stateStartMs = millis();
             scrollDone   = false;
