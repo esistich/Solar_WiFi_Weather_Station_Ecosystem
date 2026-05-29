@@ -342,23 +342,16 @@ static void buildClockText(char* out, size_t outLen) {
 // =============================================================
 static void buildScrollText(const JsonDocument& doc, char* out, size_t outLen) {
     char tmp[20];
-    char zbuf[160];
 
-    float  temp           = doc["temperature"]        | 0.0f;
-    float  pool           = doc["pool_temperature"]   | -99.0f;
-    float  hum            = doc["humidity"]           | 0.0f;
-    int    relPress       = doc["rel_pressure"]       | 0;
-    const char* zambretti = doc["zambretti"]          | "";
-    const char* trend     = doc["trend"]              | "";
-    const char* ts        = doc["timestamp"]          | "";
+    float temp = doc["temperature"]      | 0.0f;
+    float pool = doc["pool_temperature"] | -99.0f;
+    const char* ts = doc["timestamp"]   | "";
 
     out[0] = '\0';
 
-    // Zeitstempel des letzten Messwertes
+    // Zeitstempel des letzten Messwertes (nur HH:MM)
     if (strlen(ts) > 0) {
-        // ts ist i.d.R. "YYYY-MM-DD HH:MM:SS" – wir zeigen nur HH:MM
-        const char* timepart = ts;
-        if (strlen(ts) >= 16) timepart = ts + 11;  // Zeichen ab Index 11 = "HH:MM"
+        const char* timepart = (strlen(ts) >= 16) ? ts + 11 : ts;
         strncat(out, "Stand:", outLen - strlen(out) - 1);
         strncat(out, timepart, outLen - strlen(out) - 1);
         strncat(out, "h  ", outLen - strlen(out) - 1);
@@ -374,30 +367,6 @@ static void buildScrollText(const JsonDocument& doc, char* out, size_t outLen) {
         dtostrf(pool, 1, 1, tmp);
         strncat(out, tmp, outLen - strlen(out) - 1);
         strncat(out, "\xB0""C  ", outLen - strlen(out) - 1);
-    }
-
-    strncat(out, "Hum:", outLen - strlen(out) - 1);
-    dtostrf(hum, 1, 0, tmp);
-    strncat(out, tmp, outLen - strlen(out) - 1);
-    strncat(out, "%  P:", outLen - strlen(out) - 1);
-    snprintf(tmp, sizeof(tmp), "%d", relPress);
-    strncat(out, tmp, outLen - strlen(out) - 1);
-    strncat(out, "hPa", outLen - strlen(out) - 1);
-
-    if (strlen(zambretti) > 0) {
-        replaceUmlauts(zambretti, zbuf, sizeof(zbuf));
-        Serial.print(F("Zambretti konvertiert: "));
-        Serial.println(zbuf);
-        strncat(out, "  ", outLen - strlen(out) - 1);
-        strncat(out, zbuf, outLen - strlen(out) - 1);
-    }
-    if (strlen(trend) > 0) {
-        replaceUmlauts(trend, zbuf, sizeof(zbuf));
-        Serial.print(F("Trend konvertiert: "));
-        Serial.println(zbuf);
-        strncat(out, " (", outLen - strlen(out) - 1);
-        strncat(out, zbuf, outLen - strlen(out) - 1);
-        strncat(out, ")", outLen - strlen(out) - 1);
     }
 }
 
