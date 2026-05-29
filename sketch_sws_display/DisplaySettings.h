@@ -8,8 +8,8 @@
 // ============================================================
 
 // ------ Config-Portal ---------------------------------------
-// D3 (GPIO0) = eingebauter FLASH/BOOT-Taster des WEMOS D1 Mini
-#define CONFIG_BUTTON_PIN   0
+// D1 (GPIO5) – freier Pin, keine Boot-Einschraenkung
+#define CONFIG_BUTTON_PIN   5
 #define CONFIG_AP_SSID      "SWS-Display-Config"   // offener AP, kein Passwort
 
 // ------ WiFi (bewusst leer – Eingabe über Config-Portal) ----
