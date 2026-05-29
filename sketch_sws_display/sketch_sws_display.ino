@@ -177,7 +177,8 @@ static void startConfigPortal() {
     Serial.println(F("AP: SWS-Display-Config  IP: 192.168.4.1"));
 
     display.displayClear();
-    display.displayScroll("Config...", PA_LEFT, PA_SCROLL_LEFT, 40);
+    display.displayText("CFG", PA_CENTER, 0, 0, PA_PRINT);
+    display.displayAnimate();
 
     WiFi.persistent(false);
     WiFi.disconnect();
@@ -280,7 +281,6 @@ input[type=checkbox]{width:18px;height:18px}
 
     while (true) {
         server.handleClient();
-        display.displayAnimate();
         yield();
     }
 }
