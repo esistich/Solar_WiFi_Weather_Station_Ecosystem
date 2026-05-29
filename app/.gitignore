@@ -1,0 +1,15 @@
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+*.g.dart
+
+# Android
+android/local.properties
+android/.gradle/
+android/key.properties
+
+# Umgebungsvariablen
+.env

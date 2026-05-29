@@ -1,0 +1,2 @@
+Platzhalter – ersetze diese Datei durch ein echtes 1024×1024 px PNG.
+Danach ausführen: dart run flutter_launcher_icons

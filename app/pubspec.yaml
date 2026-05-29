@@ -1,0 +1,64 @@
+name: sws_companion
+description: SWS Companion App – Wetterstationen überwachen und konfigurieren.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  provider: ^6.1.2
+
+  # HTTP
+  http: ^1.2.1
+
+  # Lokaler Speicher (Geräte-Liste, JWT-Token)
+  shared_preferences: ^2.3.1
+
+  # History-Chart
+  fl_chart: ^0.68.0
+
+  # JSON Serialisierung
+  json_annotation: ^4.9.0
+
+  # Icons
+  cupertino_icons: ^1.0.8
+
+  # Zeitformatierung
+  intl: ^0.19.0
+
+  # WiFi-Verwaltung für Soft-AP Setup
+  wifi_iot: ^0.3.19+1
+
+  # UUID-Generierung für Geräte-IDs
+  uuid: ^4.4.2
+
+  # Push Notifications (FCM)
+  firebase_core: ^3.3.0
+  firebase_messaging: ^15.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  build_runner: ^2.4.11
+  json_serializable: ^6.8.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+
+# App-Icon (nach Anpassen von assets/images/app_icon.png ausführen:
+#   dart run flutter_launcher_icons)
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/images/app_icon.png"
+  min_sdk_android: 26
+  adaptive_icon_background: "#1565C0"
+  adaptive_icon_foreground: "assets/images/app_icon.png"
