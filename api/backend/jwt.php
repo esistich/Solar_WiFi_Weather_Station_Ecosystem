@@ -6,7 +6,7 @@
 $_jwtSecret = getenv('JWT_SECRET');
 if (!$_jwtSecret) {
     // Fallback für Shared-Hosting ohne Shell-Env: Wert in einer lokalen Konfigdatei
-    $cfgFile = __DIR__ . '/../../jwt_secret.php';
+    $cfgFile = __DIR__ . '/../jwt_secret.php';
     if (file_exists($cfgFile)) require_once $cfgFile;
     $_jwtSecret = defined('JWT_SECRET_VALUE') ? JWT_SECRET_VALUE : null;
 }

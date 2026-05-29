@@ -27,7 +27,8 @@ Läuft direkt auf one.com Shared Hosting (PHP 8 + MySQL).
    - **Projekteinstellungen → Service-Konten → Neuen privaten Schlüssel generieren**
    - Heruntergeladene JSON-Datei (`swsfb-11c77-firebase-adminsdk-fbsvc-7dc4d2384c.json`) nach `sws/api/` hochladen  
      (eine Ebene oberhalb von `backend/`, per `.htaccess` geschützt)
-   - Die `project_id` wird automatisch aus der JSON gelesen – kein manuelles Eintragen nötig
+   - `jwt_secret.php` (aus `jwt_secret.example.php` ableiten) → `sws/api/jwt_secret.php` hochladen  
+     (direkt neben `backend/`, per `.htaccess` geschützt)
 
 ## API-Endpunkte
 

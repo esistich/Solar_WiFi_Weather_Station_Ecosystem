@@ -20,6 +20,10 @@ if (!$isCli) {
     header('Content-Type: text/plain; charset=utf-8');
 }
 
+// PHP-Fehler im Test sichtbar machen
+ini_set('display_errors', '1');
+error_reporting(E_ALL);
+
 function req(string $route, string $action, array $body = [], string $bearer = ''): array
 {
 	$url     = BASE . "?route=$route&action=$action";
@@ -59,6 +63,7 @@ if ($r['__code'] === 201 && !empty($r['token'])) {
 	info("Token: " . substr($token, 0, 40) . '…');
 } else {
 	fail('Registrierung fehlgeschlagen: ' . json_encode($r));
+	if ($r['__code'] === 500) info(">>> Server-Fehler: " . ($r['__raw'] ?? '(leer)'));
 }
 
 // ── 2. Doppelte Registrierung abgelehnt ───────────────────────────────────
