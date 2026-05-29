@@ -31,7 +31,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/jwt.php';
 
-// ── Konfiguration ──────────────────────────────────────────────────────────
+// Globaler Fehler-Handler: gibt JSON statt leere 500-Seite zurück
+set_exception_handler(function (Throwable $e) {
+    http_response_code(500);
+    echo json_encode(['error' => $e->getMessage(), 'file' => basename($e->getFile()), 'line' => $e->getLine()]);
+    exit;
+});
+
+// ── Konfiguration ─────────────────────────────────────
 // Pfad zur Service-Account-JSON (eine Ebene oberhalb von api/backend/)
 define('FCM_SA_FILE', __DIR__ . '/../swsfb-11c77-firebase-adminsdk-fbsvc-7dc4d2384c.json');
 // Project-ID wird automatisch aus der JSON gelesen – kein manuelles Eintragen nötig

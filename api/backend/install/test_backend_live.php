@@ -96,9 +96,12 @@ echo "\n5. Push-Token registrieren\n";
 if ($token) {
 	$r = req('push', 'register', ['fcm_token' => 'test_fcm_token_dummy_' . time()], $token);
 	info("HTTP {$r['__code']}");
-	$r['__code'] === 200
-		? pass('Push-Token gespeichert')
-		: fail("Fehlgeschlagen: " . json_encode($r));
+	if ($r['__code'] === 200) {
+		pass('Push-Token gespeichert');
+	} else {
+		fail("Fehlgeschlagen: " . json_encode($r));
+		info(">>> Raw: " . ($r['__raw'] ?? '(leer)'));
+	}
 } else {
 	fail('Kein Token vorhanden – übersprungen');
 }
@@ -106,9 +109,12 @@ if ($token) {
 // ── 6. Push ohne Auth abgelehnt ───────────────────────────────────────────
 echo "\n6. Push ohne Auth\n";
 $r = req('push', 'register', ['fcm_token' => 'dummy'], '');
-$r['__code'] === 401
-	? pass("Abgelehnt (401)")
-	: fail("Erwartet 401, bekommen {$r['__code']}: " . json_encode($r));
+if ($r['__code'] === 401) {
+	pass("Abgelehnt (401)");
+} else {
+	fail("Erwartet 401, bekommen {$r['__code']}: " . json_encode($r));
+	info(">>> Raw: " . ($r['__raw'] ?? '(leer)'));
+}
 
 // ── 7. Logout ─────────────────────────────────────────────────────────────
 echo "\n7. Logout\n";
