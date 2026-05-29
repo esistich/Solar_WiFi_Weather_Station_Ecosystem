@@ -393,18 +393,22 @@ static void buildClockText(char* out, size_t outLen) {
 // =============================================================
 static void buildScrollText(const JsonDocument& doc, char* out, size_t outLen) {
     char tmp[20];
+    char tsBuf[24] = "";
 
     float temp = doc["temperature"]      | 0.0f;
     float pool = doc["pool_temperature"] | -99.0f;
-    const char* ts = doc["created_at"] | "";
+    const char* tsRaw = doc["created_at"] | "";
+    strncpy(tsBuf, tsRaw, sizeof(tsBuf) - 1);
 
     out[0] = '\0';
 
-    // Zeitstempel des letzten Messwertes (nur HH:MM)
-    if (strlen(ts) > 0) {
-        const char* timepart = (strlen(ts) >= 16) ? ts + 11 : ts;
+    // Zeitstempel: nur HH:MM (Index 11-15 aus "YYYY-MM-DD HH:MM:SS")
+    if (strlen(tsBuf) >= 16) {
+        char timePart[6] = "";
+        strncpy(timePart, tsBuf + 11, 5);  // "HH:MM"
+        timePart[5] = '\0';
         strncat(out, "Stand:", outLen - strlen(out) - 1);
-        strncat(out, timepart, outLen - strlen(out) - 1);
+        strncat(out, timePart, outLen - strlen(out) - 1);
         strncat(out, "h  ", outLen - strlen(out) - 1);
     }
 
@@ -657,10 +661,11 @@ void loop() {
             lastClockUpdate = millis();
             buildClockText(clockText, sizeof(clockText));
             display.displayText(clockText, PA_CENTER, 0, 0, PA_PRINT);
-            updateProgressBar(millis() - stateStartMs,
-                              (unsigned long)CLOCK_DISPLAY_SEC * 1000UL);
         }
         display.displayAnimate();
+        // Progressbar nach Parola-Render schreiben (sonst wird sie ueberschrieben)
+        updateProgressBar(millis() - stateStartMs,
+                          (unsigned long)CLOCK_DISPLAY_SEC * 1000UL);
 
         // Nach 30 Sekunden in den Scroll-Modus wechseln
         if (millis() - stateStartMs >= (unsigned long)CLOCK_DISPLAY_SEC * 1000UL) {
