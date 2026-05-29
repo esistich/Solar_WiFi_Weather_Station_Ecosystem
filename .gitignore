@@ -10,4 +10,5 @@ build/
 # Secrets – niemals committen
 jwt_secret.php
 *firebase*adminsdk*.json
+google-services.json
 upload_package.zip
