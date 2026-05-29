@@ -21,8 +21,14 @@ Läuft direkt auf one.com Shared Hosting (PHP 8 + MySQL).
 2. `install/backend_schema.sql` in phpMyAdmin ausführen.
 3. In `jwt.php` den Platzhalter `ersetze_mit_langem_zufaelligen_string`  
    durch einen echten Zufallsstring ersetzen (z. B. 64 Hex-Zeichen).
-4. In `push.php` `DEIN_FCM_LEGACY_SERVER_KEY` durch den FCM-Serverschlüssel  
-   aus der Firebase-Konsole ersetzen.
+4. **Firebase Service-Account einrichten:**
+   - [console.firebase.google.com](https://console.firebase.google.com) → Projekt anlegen
+   - Android-App registrieren, `google-services.json` nach `app/android/app/` kopieren
+   - **Projekteinstellungen → Service-Konten → Neuen privaten Schlüssel generieren**
+   - Heruntergeladene JSON-Datei als `firebase_service_account.json` nach `sws/api/` hochladen  
+     (eine Ebene oberhalb von `backend/`, per `.htaccess` geschützt)
+   - In `push.php` `FCM_PROJECT_ID` auf die Firebase-Projekt-ID setzen  
+     (steht in der JSON unter `"project_id"`)
 
 ## API-Endpunkte
 

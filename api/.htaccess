@@ -16,3 +16,8 @@ Options -Indexes
 	Order allow,deny
 	Deny from all
 </FilesMatch>
+
+# Service-Account-JSON vor Direktzugriff schützen
+<FilesMatch "firebase_service_account\.json$">
+	Require all denied
+</FilesMatch>
