@@ -548,6 +548,18 @@ void setup() {
 //  loop()
 // =============================================================
 void loop() {
+    // Config-Button (D3/GPIO0): 2 Sekunden gedrückt halten -> Config-Portal
+    static unsigned long btnPressedMs = 0;
+    if (digitalRead(CONFIG_BUTTON_PIN) == LOW) {
+        if (btnPressedMs == 0) btnPressedMs = millis();
+        if (millis() - btnPressedMs >= 2000UL) {
+            Serial.println(F("Taster 2s gehalten -> Config-Portal"));
+            startConfigPortal();   // kehrt nicht zurück
+        }
+    } else {
+        btnPressedMs = 0;
+    }
+
     // LDR: Helligkeit automatisch anpassen
     static unsigned long lastLdr = 0;
     if (millis() - lastLdr >= LDR_UPDATE_MS) {
