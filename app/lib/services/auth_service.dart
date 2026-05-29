@@ -10,7 +10,7 @@ class AuthService extends ChangeNotifier {
   static const _userKey  = 'auth_user_v1';
 
   // Backend-URL – in der App konfigurierbar (Settings)
-  static const String defaultBackendUrl = 'https://timm-sander.net';
+  static const String defaultBackendUrl = 'https://timm-sander.net/sws';
 
   AppUser? _currentUser;
   String _backendUrl = defaultBackendUrl;

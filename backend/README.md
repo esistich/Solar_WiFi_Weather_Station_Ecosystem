@@ -4,6 +4,31 @@
 - Node.js 20+
 - Firebase-Projekt (kostenlos auf console.firebase.google.com)
 
+## Deployment-Pfad
+Das Backend läuft unter `/sws/` auf dem Webserver, also:
+```
+https://timm-sander.net/sws/auth/login
+https://timm-sander.net/sws/push/subscribe
+```
+
+Beim Deployment mit Apache/nginx muss ein Reverse-Proxy eingerichtet werden,
+der `/sws/` an den Node.js-Prozess (Port 3001) weiterleitet.
+
+### Apache (in .htaccess oder VirtualHost)
+```apache
+ProxyPass /sws/ http://localhost:3001/
+ProxyPassReverse /sws/ http://localhost:3001/
+```
+
+### nginx
+```nginx
+location /sws/ {
+    proxy_pass http://localhost:3001/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+}
+```
+
 ## Setup
 
 ```bash
