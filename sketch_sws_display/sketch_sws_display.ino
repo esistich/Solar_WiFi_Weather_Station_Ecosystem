@@ -354,19 +354,6 @@ static void buildScrollText(const JsonDocument& doc, char* out, size_t outLen) {
 
     out[0] = '\0';
 
-    // Innenraumsensor DHT22
-    if (!isnan(indoorTemp)) {
-        strncat(out, "Innen:", outLen - strlen(out) - 1);
-        dtostrf(indoorTemp, 1, 1, tmp);
-        strncat(out, tmp, outLen - strlen(out) - 1);
-        strncat(out, "\xB0""C ", outLen - strlen(out) - 1);
-        if (!isnan(indoorHum)) {
-            dtostrf(indoorHum, 1, 0, tmp);
-            strncat(out, tmp, outLen - strlen(out) - 1);
-            strncat(out, "%  ", outLen - strlen(out) - 1);
-        }
-    }
-
     // Zeitstempel des letzten Messwertes
     if (strlen(ts) > 0) {
         // ts ist i.d.R. "YYYY-MM-DD HH:MM:SS" – wir zeigen nur HH:MM
@@ -604,11 +591,10 @@ void loop() {
     // NTP periodisch aktualisieren
     ntpClient.update();
 
-    // Neue API-Daten sofort übernehmen (unabhaengig vom Anzeigemodus)
+    // Neue API-Daten merken (werden beim naechsten Scroll-Start mit DHT kombiniert)
     if (newDataReady) {
-        strncpy(scrollText, pendingText, sizeof(scrollText));
         newDataReady = false;
-        Serial.println(F("scrollText aktualisiert."));
+        Serial.println(F("pendingText bereit."));
     }
 
     // ---- Zustandsmaschine ----
@@ -624,6 +610,21 @@ void loop() {
 
         // Nach 30 Sekunden in den Scroll-Modus wechseln
         if (millis() - stateStartMs >= (unsigned long)CLOCK_DISPLAY_SEC * 1000UL) {
+            // Aktuellen DHT-Wert voranstellen, dann API-Daten anhaengen
+            char tmp[20];
+            scrollText[0] = '\0';
+            if (!isnan(indoorTemp)) {
+                strncat(scrollText, "Innen:", sizeof(scrollText) - strlen(scrollText) - 1);
+                dtostrf(indoorTemp, 1, 1, tmp);
+                strncat(scrollText, tmp, sizeof(scrollText) - strlen(scrollText) - 1);
+                strncat(scrollText, "\xB0""C ", sizeof(scrollText) - strlen(scrollText) - 1);
+                if (!isnan(indoorHum)) {
+                    dtostrf(indoorHum, 1, 0, tmp);
+                    strncat(scrollText, tmp, sizeof(scrollText) - strlen(scrollText) - 1);
+                    strncat(scrollText, "%  ", sizeof(scrollText) - strlen(scrollText) - 1);
+                }
+            }
+            strncat(scrollText, pendingText, sizeof(scrollText) - strlen(scrollText) - 1);
             display.displayScroll(scrollText, PA_LEFT, PA_SCROLL_LEFT, cfg.scroll_ms);
             dispState    = STATE_SCROLL;
             stateStartMs = millis();
