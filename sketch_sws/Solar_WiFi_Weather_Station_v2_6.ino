@@ -259,6 +259,47 @@ unsigned long saved_timestamp;      // Timestamp stored in SPIFFS
 float pressure_value[12];           // Array for the historical pressure values (6 hours, all 30 mins), where as pressure_value[0] is always the most recent value
 float pressure_difference[12];      // Array to calculate trend with pressure differences
 
+// =====================================================================
+//  Europaeische Sommerzeit (CET/CEST) auf Basis von UTC-Epoch
+//  Letzter Sonntag im Maerz 01:00 UTC  -> CEST (+2h)
+//  Letzter Sonntag im Oktober 01:00 UTC -> CET  (+1h)
+// =====================================================================
+static bool isCEST(unsigned long utcEpoch) {
+    unsigned long days = utcEpoch / 86400UL;
+    unsigned long tod  = utcEpoch % 86400UL;
+    int dow = (int)((days + 4) % 7);  // 0=Sonntag
+    int y = 1970;
+    unsigned long d = days;
+    while (true) {
+        bool lp = (y % 4 == 0 && (y % 100 != 0 || y % 400 == 0));
+        unsigned long dy = lp ? 366 : 365;
+        if (d < dy) break;
+        d -= dy; y++;
+    }
+    bool leap = (y % 4 == 0 && (y % 100 != 0 || y % 400 == 0));
+    static const uint8_t dim[12] = {31,28,31,30,31,30,31,31,30,31,30,31};
+    int m = 0;
+    while (true) {
+        uint8_t md = dim[m]; if (m == 1 && leap) md = 29;
+        if ((int)d < md) break;
+        d -= md; m++;
+    }
+    int dom = (int)d + 1;
+    m++;
+    uint8_t ld = dim[m - 1]; if (m == 2 && leap) ld = 29;
+    int dowLd  = (dow - (dom - ld) % 7 + 7) % 7;
+    int lastSun = ld - dowLd;
+    if (m < 3 || m > 10) return false;
+    if (m > 3 && m < 10) return true;
+    if (m == 3)  return (dom > lastSun) || (dom == lastSun && tod >= 3600UL);
+    /* m==10 */  return (dom < lastSun) || (dom == lastSun && tod <  3600UL);
+}
+
+// Lokalen Timestamp (CET/CEST) aus UTC-Epoch berechnen
+static unsigned long localTimestamp(unsigned long utcEpoch) {
+    return utcEpoch + (isCEST(utcEpoch) ? 7200UL : 3600UL);
+}
+
 // variables for forcasting result
 int accuracy;                       // Counter, if enough values for accurate forecasting
 String ZambrettisWords;             // Final statement about weather forecast (after {P}/{E} substitution)
@@ -1127,7 +1168,7 @@ void sendToAPI() {
   jsonDoc["battery"]         = volt;
   jsonDoc["batterypercentage"]= batterypercentage;
   jsonDoc["wifi_strength"]   = (int)WiFi.RSSI();
-  jsonDoc["timestamp"]       = current_timestamp;
+  jsonDoc["timestamp"]       = localTimestamp(current_timestamp);
 
   char payload[640];
   serializeJson(jsonDoc, payload);
