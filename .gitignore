@@ -6,3 +6,8 @@ build/
 *.bin
 *.elf
 *.map
+
+# Secrets – niemals committen
+jwt_secret.php
+*firebase*adminsdk*.json
+upload_package.zip

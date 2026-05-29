@@ -3,7 +3,16 @@
  * jwt.php – Schlanke HS256 JWT-Implementierung (kein Composer nötig).
  */
 
-define('JWT_SECRET', getenv('JWT_SECRET') ?: 'ersetze_mit_langem_zufaelligen_string');
+$_jwtSecret = getenv('JWT_SECRET');
+if (!$_jwtSecret) {
+    // Fallback für Shared-Hosting ohne Shell-Env: Wert in einer lokalen Konfigdatei
+    $cfgFile = __DIR__ . '/../../jwt_secret.php';
+    if (file_exists($cfgFile)) require_once $cfgFile;
+    $_jwtSecret = defined('JWT_SECRET_VALUE') ? JWT_SECRET_VALUE : null;
+}
+if (!$_jwtSecret) throw new RuntimeException('JWT_SECRET nicht konfiguriert');
+define('JWT_SECRET', $_jwtSecret);
+unset($_jwtSecret);
 define('JWT_TTL',    30 * 24 * 3600); // 30 Tage
 
 function jwtEncode(array $payload): string
