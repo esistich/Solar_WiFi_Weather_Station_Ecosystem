@@ -483,6 +483,7 @@ void setup() {
     // Display initialisieren
     pinMode(LDR_PIN, INPUT);
     display.begin();
+    mx.begin();  // fuer direkten LED-Zugriff (Statusanzeige)
     display.setIntensity((cfg.intensity_min + cfg.intensity_max) / 2);
     display.displayClear();
     display.setTextAlignment(PA_LEFT);
@@ -600,6 +601,13 @@ void loop() {
     // NTP periodisch aktualisieren
     ntpClient.update();
 
+    // Neue API-Daten sofort übernehmen (unabhaengig vom Anzeigemodus)
+    if (newDataReady) {
+        strncpy(scrollText, pendingText, sizeof(scrollText));
+        newDataReady = false;
+        Serial.println(F("scrollText aktualisiert."));
+    }
+
     // ---- Zustandsmaschine ----
     if (dispState == STATE_CLOCK) {
         // Uhrtext jede Sekunde aktualisieren
@@ -613,11 +621,6 @@ void loop() {
 
         // Nach 30 Sekunden in den Scroll-Modus wechseln
         if (millis() - stateStartMs >= (unsigned long)CLOCK_DISPLAY_SEC * 1000UL) {
-            // Neue API-Daten übernehmen falls vorhanden
-            if (newDataReady) {
-                strncpy(scrollText, pendingText, sizeof(scrollText));
-                newDataReady = false;
-            }
             display.displayScroll(scrollText, PA_LEFT, PA_SCROLL_LEFT, cfg.scroll_ms);
             dispState    = STATE_SCROLL;
             stateStartMs = millis();
@@ -648,9 +651,8 @@ void loop() {
     if (errorWifi != lastErrorWifi || errorApi != lastErrorApi) {
         lastErrorWifi = errorWifi;
         lastErrorApi  = errorApi;
-        mx.begin();
-        mx.setRow(0, 7, errorWifi ? 0xFF : 0x00);  // WLAN-Fehler: erste Matrix
-        mx.setRow(3, 7, errorApi  ? 0xFF : 0x00);  // API-Fehler:  letzte Matrix
+        mx.setRow(0, 7, errorWifi ? 0xFF : 0x00);
+        mx.setRow(3, 7, errorApi  ? 0xFF : 0x00);
     }
 }
 
