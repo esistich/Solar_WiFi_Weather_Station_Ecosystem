@@ -1,9 +1,14 @@
 # Alle Anfragen an index.php weiterleiten
 <IfModule mod_rewrite.c>
 	RewriteEngine On
+	# Authorization-Header an PHP weitergeben (Apache filtert ihn sonst heraus)
+	RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 	RewriteCond %{REQUEST_FILENAME} !-f
 	RewriteRule ^ index.php [QSA,L]
 </IfModule>
+
+# CGI-Modus: Authorization-Header durchreichen
+CGIPassAuth On
 
 # jwt.php und db.php vor Direktzugriff schützen
 <FilesMatch "^(jwt|db)\.php$">

@@ -56,18 +56,43 @@ function jsonOut(int $code, array $data): void
     exit;
 }
 
+/**
+ * Liest den Authorization-Header zuverlässig aus, auch wenn Apache
+ * HTTP_AUTHORIZATION nicht an PHP weitergibt (typisch bei mod_php/CGI).
+ */
+function getAuthHeader(): string
+{
+    // Standard: mod_php setzt diesen Wert direkt
+    if (!empty($_SERVER['HTTP_AUTHORIZATION'])) {
+        return $_SERVER['HTTP_AUTHORIZATION'];
+    }
+    // CGI/FastCGI: Apache kann den Header als REDIRECT_HTTP_AUTHORIZATION übergeben
+    if (!empty($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+        return $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+    }
+    // Fallback: getallheaders() funktioniert bei Apache mod_php und einigen CGI-Setups
+    if (function_exists('getallheaders')) {
+        foreach (getallheaders() as $name => $value) {
+            if (strcasecmp($name, 'Authorization') === 0) {
+                return $value;
+            }
+        }
+    }
+    return '';
+}
+
 function requireAuth(): array
 {
-    $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    $auth = getAuthHeader();
     if (!str_starts_with($auth, 'Bearer ')) {
         jsonOut(401, ['error' => 'Kein Token']);
-        exit; // never reached, satisfies return type
+        exit;
     }
     try {
         return jwtDecode(substr($auth, 7));
     } catch (RuntimeException $e) {
         jsonOut(401, ['error' => $e->getMessage()]);
-        exit; // never reached
+        exit;
     }
 }
 
