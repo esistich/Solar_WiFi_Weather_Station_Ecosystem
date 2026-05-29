@@ -40,3 +40,10 @@
 #define CFG_DEFAULT_INTENSITY_MAX  12     // Helligkeit bei hellem Licht (0–15)
 
 #define CFG_DEFAULT_SCROLL_MS      40     // ms pro Scroll-Schritt
+
+// ------ NTP -------------------------------------------------
+#define CFG_DEFAULT_NTP_SERVER  "pool.ntp.org"
+#define CFG_DEFAULT_NTP_OFFSET  3600      // UTC+1 (Winterzeit); Sommerzeit = 7200
+
+// ------ Anzeigesteuerung ------------------------------------
+#define CLOCK_DISPLAY_SEC       30        // Sekunden Uhranzeige je Phase

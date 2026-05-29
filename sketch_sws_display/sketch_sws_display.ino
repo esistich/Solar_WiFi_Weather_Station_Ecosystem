@@ -33,6 +33,8 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266HTTPClient.h>
 #include <WiFiClientSecure.h>
+#include <WiFiUdp.h>
+#include <NTPClient.h>
 #include <ArduinoJson.h>
 #include <EEPROM.h>
 #include <MD_Parola.h>
@@ -57,6 +59,7 @@ struct DisplayConfig {
     int   intensity_min;   // LDR-Dunkel-Grenze (0–15)
     int   intensity_max;   // LDR-Hell-Grenze  (0–15)
     int   scroll_ms;
+    long  ntp_offset;      // UTC-Offset in Sekunden (z.B. 3600 = UTC+1)
 };
 
 DisplayConfig cfg;
@@ -66,6 +69,16 @@ DisplayConfig cfg;
 
 // ------ Globale Objekte --------------------------------------
 MD_Parola display = MD_Parola(HARDWARE_TYPE, DISPLAY_CS_PIN, NUM_DEVICES);
+
+// ------ NTP --------------------------------------------------
+static WiFiUDP     ntpUdp;
+static NTPClient   ntpClient(ntpUdp);
+
+// ------ Anzeigemodus -----------------------------------------
+enum DisplayState { STATE_CLOCK, STATE_SCROLL };
+static DisplayState dispState        = STATE_CLOCK;
+static unsigned long stateStartMs    = 0;
+static bool          scrollDone      = false;
 
 // ------ Scroll-Puffer ----------------------------------------
 static char scrollText[512];
@@ -86,6 +99,7 @@ static void applyDefaults() {
     cfg.intensity_min = CFG_DEFAULT_INTENSITY_MIN;
     cfg.intensity_max = CFG_DEFAULT_INTENSITY_MAX;
     cfg.scroll_ms     = CFG_DEFAULT_SCROLL_MS;
+    cfg.ntp_offset    = CFG_DEFAULT_NTP_OFFSET;
 }
 
 // =============================================================
@@ -124,6 +138,7 @@ static void loadConfig() {
     if (!doc["int_min"].isNull())         cfg.intensity_min  = doc["int_min"];
     if (!doc["int_max"].isNull())         cfg.intensity_max  = doc["int_max"];
     if (!doc["scroll_ms"].isNull())      cfg.scroll_ms      = doc["scroll_ms"];
+    if (!doc["ntp_offset"].isNull())     cfg.ntp_offset     = doc["ntp_offset"];
 
     Serial.println(F("Konfiguration aus EEPROM geladen."));
 }
@@ -138,10 +153,11 @@ static void saveConfig() {
     doc["api_host"]  = cfg.api_host;
     doc["api_path"]  = cfg.api_path;
     doc["api_https"] = cfg.api_https;
-    doc["fetch_sec"] = cfg.fetch_sec;
-    doc["int_min"]   = cfg.intensity_min;
-    doc["int_max"]   = cfg.intensity_max;
-    doc["scroll_ms"] = cfg.scroll_ms;
+    doc["fetch_sec"]   = cfg.fetch_sec;
+    doc["int_min"]     = cfg.intensity_min;
+    doc["int_max"]     = cfg.intensity_max;
+    doc["scroll_ms"]   = cfg.scroll_ms;
+    doc["ntp_offset"]  = cfg.ntp_offset;
 
     char buf[EEPROM_SIZE - EEPROM_DATA_OFF];
     serializeJson(doc, buf, sizeof(buf));
@@ -218,6 +234,8 @@ input[type=checkbox]{width:18px;height:18px}
         html += fieldInt("Helligkeit min (dunkel, 0-15)", "int_min", cfg.intensity_min);
         html += fieldInt("Helligkeit max (hell, 0-15)",   "int_max", cfg.intensity_max);
         html += fieldInt("Scroll-Geschw. (ms)", "scroll_ms", cfg.scroll_ms);
+        html += "</table><h2>Uhrzeit (NTP)</h2><table>";
+        html += fieldInt("UTC-Offset (Sek.)<br><small>Winter=3600, Sommer=7200</small>", "ntp_offset", (int)cfg.ntp_offset);
         html += R"(</table>
 <button class='btn' type='submit'>Speichern &amp; Neustart</button>
 <p class='note'>Nach dem Speichern startet das Display automatisch neu.</p>
@@ -241,6 +259,7 @@ input[type=checkbox]{width:18px;height:18px}
         cfg.intensity_min = constrain(get("int_min", String(cfg.intensity_min).c_str()).toInt(), 0, 15);
         cfg.intensity_max = constrain(get("int_max", String(cfg.intensity_max).c_str()).toInt(), 0, 15);
         cfg.scroll_ms  = get("scroll_ms", String(cfg.scroll_ms).c_str()).toInt();
+        cfg.ntp_offset = get("ntp_offset", String((int)cfg.ntp_offset).c_str()).toInt();
         if (cfg.fetch_sec < 10)  cfg.fetch_sec = 10;
         if (cfg.scroll_ms < 10)  cfg.scroll_ms = 10;
 
@@ -296,11 +315,20 @@ static void replaceUmlauts(const char* src, char* dst, size_t dstLen) {
 }
 
 // =============================================================
+//  Uhrzeit-Text aufbauen  (HH:MM)
+// =============================================================
+static void buildClockText(char* out, size_t outLen) {
+    int h = ntpClient.getHours();
+    int m = ntpClient.getMinutes();
+    snprintf(out, outLen, "%02d:%02d", h, m);
+}
+
+// =============================================================
 //  Anzeigetext aus JSON zusammenbauen
 // =============================================================
 static void buildScrollText(const JsonDocument& doc, char* out, size_t outLen) {
-    char tmp[16];
-    char zbuf[160];   // Zambretti-Text nach Umlaut-Ersetzung
+    char tmp[20];
+    char zbuf[160];
 
     float  temp           = doc["temperature"]        | 0.0f;
     float  pool           = doc["pool_temperature"]   | -99.0f;
@@ -308,8 +336,19 @@ static void buildScrollText(const JsonDocument& doc, char* out, size_t outLen) {
     int    relPress       = doc["rel_pressure"]       | 0;
     const char* zambretti = doc["zambretti"]          | "";
     const char* trend     = doc["trend"]              | "";
+    const char* ts        = doc["timestamp"]          | "";
 
     out[0] = '\0';
+
+    // Zeitstempel des letzten Messwertes
+    if (strlen(ts) > 0) {
+        // ts ist i.d.R. "YYYY-MM-DD HH:MM:SS" – wir zeigen nur HH:MM
+        const char* timepart = ts;
+        if (strlen(ts) >= 16) timepart = ts + 11;  // Zeichen ab Index 11 = "HH:MM"
+        strncat(out, "Stand:", outLen - strlen(out) - 1);
+        strncat(out, timepart, outLen - strlen(out) - 1);
+        strncat(out, "h  ", outLen - strlen(out) - 1);
+    }
 
     strncat(out, "Luft:", outLen - strlen(out) - 1);
     dtostrf(temp, 1, 1, tmp);
@@ -333,11 +372,15 @@ static void buildScrollText(const JsonDocument& doc, char* out, size_t outLen) {
 
     if (strlen(zambretti) > 0) {
         replaceUmlauts(zambretti, zbuf, sizeof(zbuf));
+        Serial.print(F("Zambretti konvertiert: "));
+        Serial.println(zbuf);
         strncat(out, "  ", outLen - strlen(out) - 1);
         strncat(out, zbuf, outLen - strlen(out) - 1);
     }
     if (strlen(trend) > 0) {
         replaceUmlauts(trend, zbuf, sizeof(zbuf));
+        Serial.print(F("Trend konvertiert: "));
+        Serial.println(zbuf);
         strncat(out, " (", outLen - strlen(out) - 1);
         strncat(out, zbuf, outLen - strlen(out) - 1);
         strncat(out, ")", outLen - strlen(out) - 1);
@@ -451,46 +494,94 @@ void setup() {
     }
     Serial.printf("WiFi OK – IP: %s\n", WiFi.localIP().toString().c_str());
 
-    // Erster Abruf
+    // NTP starten
+    ntpClient.setPoolServerName(CFG_DEFAULT_NTP_SERVER);
+    ntpClient.setTimeOffset(cfg.ntp_offset);
+    ntpClient.begin();
+    // Auf erste gültige Zeit warten (max. 5 s)
+    {
+        unsigned long t = millis();
+        while (!ntpClient.update() && millis() - t < 5000) { delay(100); yield(); }
+    }
+    Serial.printf("NTP: %s\n", ntpClient.getFormattedTime().c_str());
+
+    // Erster API-Abruf
     strncpy(scrollText, "Lade Daten...", sizeof(scrollText));
     display.displayScroll(scrollText, PA_LEFT, PA_SCROLL_LEFT, cfg.scroll_ms);
     fetchData();
-
     if (newDataReady) {
         strncpy(scrollText, pendingText, sizeof(scrollText));
         newDataReady = false;
     }
-    display.displayScroll(scrollText, PA_LEFT, PA_SCROLL_LEFT, cfg.scroll_ms);
     lastFetch = millis();
+
+    // Start im Uhrmodus
+    buildClockText(scrollText, sizeof(scrollText));
+    display.displayText(scrollText, PA_CENTER, 0, 0, PA_PRINT);
+    dispState    = STATE_CLOCK;
+    stateStartMs = millis();
 }
 
 // =============================================================
 //  loop()
 // =============================================================
 void loop() {
-    // Laufschrift-Animation
-    if (display.displayAnimate()) {
-        if (newDataReady) {
-            strncpy(scrollText, pendingText, sizeof(scrollText));
-            newDataReady = false;
-        }
-        display.displayScroll(scrollText, PA_LEFT, PA_SCROLL_LEFT, cfg.scroll_ms);
-    }
-
     // LDR: Helligkeit automatisch anpassen
     static unsigned long lastLdr = 0;
     if (millis() - lastLdr >= LDR_UPDATE_MS) {
         lastLdr = millis();
-        int raw = analogRead(LDR_PIN);   // 0 (dunkel) … 1023 (hell)
+        int raw    = analogRead(LDR_PIN);
         int bright = map(raw, 0, 1023, cfg.intensity_min, cfg.intensity_max);
-        bright = constrain(bright, 0, 15);
-        display.setIntensity(bright);
+        display.setIntensity(constrain(bright, 0, 15));
     }
 
-    // Periodischer API-Abruf
+    // Periodischer API-Abruf (im Hintergrund, blockiert Anzeige nicht)
     if (millis() - lastFetch >= (unsigned long)cfg.fetch_sec * 1000UL) {
         lastFetch = millis();
         fetchData();
+    }
+
+    // NTP periodisch aktualisieren
+    ntpClient.update();
+
+    // ---- Zustandsmaschine ----
+    if (dispState == STATE_CLOCK) {
+        // Uhrtext jede Sekunde aktualisieren
+        static unsigned long lastClockUpdate = 0;
+        if (millis() - lastClockUpdate >= 1000) {
+            lastClockUpdate = millis();
+            buildClockText(scrollText, sizeof(scrollText));
+            display.displayText(scrollText, PA_CENTER, 0, 0, PA_PRINT);
+        }
+        display.displayAnimate();
+
+        // Nach 30 Sekunden in den Scroll-Modus wechseln
+        if (millis() - stateStartMs >= (unsigned long)CLOCK_DISPLAY_SEC * 1000UL) {
+            // Neue API-Daten übernehmen falls vorhanden
+            if (newDataReady) {
+                strncpy(scrollText, pendingText, sizeof(scrollText));
+                newDataReady = false;
+            }
+            display.displayScroll(scrollText, PA_LEFT, PA_SCROLL_LEFT, cfg.scroll_ms);
+            dispState    = STATE_SCROLL;
+            stateStartMs = millis();
+            scrollDone   = false;
+            Serial.println(F("Modus: Laufschrift"));
+        }
+    } else {  // STATE_SCROLL
+        if (display.displayAnimate()) {
+            // Laufschrift einmal durchgelaufen
+            scrollDone = true;
+        }
+        if (scrollDone) {
+            // Zurück zur Uhr
+            buildClockText(scrollText, sizeof(scrollText));
+            display.displayText(scrollText, PA_CENTER, 0, 0, PA_PRINT);
+            dispState    = STATE_CLOCK;
+            stateStartMs = millis();
+            scrollDone   = false;
+            Serial.println(F("Modus: Uhr"));
+        }
     }
 }
 
