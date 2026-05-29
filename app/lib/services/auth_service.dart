@@ -40,10 +40,11 @@ class AuthService extends ChangeNotifier {
 	await _persist(user);
   }
 
-  Future<void> register(String email, String password) async {
+  Future<void> register(String email, String password, String inviteCode) async {
 	final user = await _post('auth', 'register', {
 	  'email': email,
 	  'password': password,
+	  'invite_code': inviteCode,
 	});
 	await _persist(user);
   }

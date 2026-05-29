@@ -87,54 +87,127 @@ class SettingsScreen extends StatelessWidget {
   }
 
   void _showLoginDialog(BuildContext context, AuthService auth) {
-	final emailCtrl = TextEditingController();
-	final passCtrl  = TextEditingController();
-	String? error;
-
 	showDialog(
 	  context: context,
-	  builder: (ctx) => StatefulBuilder(
-		builder: (ctx, setDialogState) => AlertDialog(
-		  title: const Text('Anmelden'),
-		  content: Column(
-			mainAxisSize: MainAxisSize.min,
-			children: [
-			  TextField(
-				controller: emailCtrl,
-				decoration: const InputDecoration(labelText: 'E-Mail'),
-				keyboardType: TextInputType.emailAddress,
-			  ),
+	  builder: (ctx) => _AuthDialog(auth: auth),
+	);
+  }
+}
+
+/// Dialog mit zwei Tabs: Anmelden und Registrieren (mit Einladungscode).
+class _AuthDialog extends StatefulWidget {
+  final AuthService auth;
+  const _AuthDialog({required this.auth});
+
+  @override
+  State<_AuthDialog> createState() => _AuthDialogState();
+}
+
+class _AuthDialogState extends State<_AuthDialog>
+	with SingleTickerProviderStateMixin {
+  late final TabController _tabs;
+
+  final _emailCtrl  = TextEditingController();
+  final _passCtrl   = TextEditingController();
+  final _inviteCtrl = TextEditingController();
+  String? _error;
+  bool _loading = false;
+
+  @override
+  void initState() {
+	super.initState();
+	_tabs = TabController(length: 2, vsync: this);
+	_tabs.addListener(() => setState(() => _error = null));
+  }
+
+  @override
+  void dispose() {
+	_tabs.dispose();
+	_emailCtrl.dispose();
+	_passCtrl.dispose();
+	_inviteCtrl.dispose();
+	super.dispose();
+  }
+
+  Future<void> _submit() async {
+	setState(() { _error = null; _loading = true; });
+	try {
+	  if (_tabs.index == 0) {
+		await widget.auth.login(_emailCtrl.text.trim(), _passCtrl.text);
+	  } else {
+		await widget.auth.register(
+		  _emailCtrl.text.trim(),
+		  _passCtrl.text,
+		  _inviteCtrl.text.trim(),
+		);
+	  }
+	  if (mounted) Navigator.pop(context);
+	} catch (e) {
+	  setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+	} finally {
+	  if (mounted) setState(() => _loading = false);
+	}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+	return AlertDialog(
+	  title: TabBar(
+		controller: _tabs,
+		tabs: const [Tab(text: 'Anmelden'), Tab(text: 'Registrieren')],
+	  ),
+	  content: SizedBox(
+		width: 320,
+		child: Column(
+		  mainAxisSize: MainAxisSize.min,
+		  children: [
+			const SizedBox(height: 12),
+			TextField(
+			  controller: _emailCtrl,
+			  decoration: const InputDecoration(labelText: 'E-Mail'),
+			  keyboardType: TextInputType.emailAddress,
+			),
+			const SizedBox(height: 8),
+			TextField(
+			  controller: _passCtrl,
+			  decoration: const InputDecoration(labelText: 'Passwort'),
+			  obscureText: true,
+			),
+			// Einladungscode nur im Registrieren-Tab
+			AnimatedSize(
+			  duration: const Duration(milliseconds: 200),
+			  child: _tabs.index == 1
+				  ? Padding(
+					  padding: const EdgeInsets.only(top: 8),
+					  child: TextField(
+						controller: _inviteCtrl,
+						decoration: const InputDecoration(
+						  labelText: 'Einladungscode',
+						  prefixIcon: Icon(Icons.vpn_key_outlined),
+						),
+					  ),
+					)
+				  : const SizedBox.shrink(),
+			),
+			if (_error != null) ...[
 			  const SizedBox(height: 8),
-			  TextField(
-				controller: passCtrl,
-				decoration: const InputDecoration(labelText: 'Passwort'),
-				obscureText: true,
-			  ),
-			  if (error != null) ...[
-				const SizedBox(height: 8),
-				Text(error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
-			  ],
+			  Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
 			],
-		  ),
-		  actions: [
-			TextButton(
-			  onPressed: () => Navigator.pop(ctx),
-			  child: const Text('Abbrechen'),
-			),
-			FilledButton(
-			  onPressed: () async {
-				try {
-				  await auth.login(emailCtrl.text.trim(), passCtrl.text);
-				  if (ctx.mounted) Navigator.pop(ctx);
-				} catch (e) {
-				  setDialogState(() => error = e.toString());
-				}
-			  },
-			  child: const Text('Anmelden'),
-			),
 		  ],
 		),
 	  ),
+	  actions: [
+		TextButton(
+		  onPressed: _loading ? null : () => Navigator.pop(context),
+		  child: const Text('Abbrechen'),
+		),
+		FilledButton(
+		  onPressed: _loading ? null : _submit,
+		  child: _loading
+			  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+			  : Text(_tabs.index == 0 ? 'Anmelden' : 'Registrieren'),
+		),
+	  ],
 	);
   }
 }
