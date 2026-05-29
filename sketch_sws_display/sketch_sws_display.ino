@@ -248,7 +248,7 @@ input[type=checkbox]{width:18px;height:18px}
         html += fieldInt("Helligkeit max (hell, 0-15)",   "int_max", cfg.intensity_max);
         html += fieldInt("Scroll-Geschw. (ms)", "scroll_ms", cfg.scroll_ms);
         html += "</table><h2>Uhrzeit (NTP)</h2><table>";
-        html += fieldInt("UTC-Offset (Sek.)<br><small>Winter=3600, Sommer=7200</small>", "ntp_offset", (int)cfg.ntp_offset);
+        html += fieldInt("UTC-Offset (Sek.)<br><small>0=Auto CET/CEST, 3600=Winter, 7200=Sommer</small>", "ntp_offset", (int)cfg.ntp_offset);
         html += R"(</table>
 <button class='btn' type='submit'>Speichern &amp; Neustart</button>
 <p class='note'>Nach dem Speichern startet das Display automatisch neu.</p>
@@ -327,14 +327,65 @@ static void replaceUmlauts(const char* src, char* dst, size_t dstLen) {
 }
 
 // =============================================================
-//  Uhrzeit-Text aufbauen  (HH:MM / HH MM im Sekundentakt)
+//  Europaeische Sommerzeit (CET/CEST)
+//  Gibt true zurueck wenn CEST aktiv ist (letzter So. Maerz bis letzter So. Oktober)
 // =============================================================
+static bool isCEST(unsigned long utcEpoch) {
+    // Tag seit Epoch und Uhrzeit
+    unsigned long days = utcEpoch / 86400UL;
+    unsigned long tod  = utcEpoch % 86400UL;
+    // Wochentag: 1.1.1970 = Donnerstag = 4; 0=Sonntag
+    int dow = (int)((days + 4) % 7);
+    // Jahr ermitteln
+    int y = 1970;
+    unsigned long d = days;
+    while (true) {
+        bool lp = (y % 4 == 0 && (y % 100 != 0 || y % 400 == 0));
+        unsigned long dy = lp ? 366 : 365;
+        if (d < dy) break;
+        d -= dy; y++;
+    }
+    bool leap = (y % 4 == 0 && (y % 100 != 0 || y % 400 == 0));
+    // Monat + Tag ermitteln
+    static const uint8_t dim[12] = {31,28,31,30,31,30,31,31,30,31,30,31};
+    int m = 0;
+    while (true) {
+        uint8_t md = dim[m]; if (m == 1 && leap) md = 29;
+        if ((int)d < md) break;
+        d -= md; m++;
+    }
+    int dom = (int)d + 1;  // 1-basiert
+    m++;                    // 1-basiert
+    // Letzter Sonntag im Monat: letzter Tag minus Wochentag des letzten Tages
+    uint8_t ld = dim[m - 1]; if (m == 2 && leap) ld = 29;
+    int dowLd  = (dow - (dom - ld) % 7 + 7) % 7;
+    int lastSun = ld - dowLd;
+
+    if (m < 3 || m > 10) return false;
+    if (m > 3 && m < 10) return true;
+    if (m == 3)  return (dom > lastSun) || (dom == lastSun && tod >= 3600UL);
+    /* m==10 */  return (dom < lastSun) || (dom == lastSun && tod <  3600UL);
+}
+
+// =============================================================
+//  UTC-Offset in Sekunden: 0=auto CET/CEST, sonst manuell
+// =============================================================
+static long currentUtcOffset() {
+    if (cfg.ntp_offset == 0) {
+        // Auto: ntpClient laeuft mit offset=0, Epochzeit ist reines UTC
+        return isCEST((unsigned long)ntpClient.getEpochTime()) ? 7200L : 3600L;
+    }
+    return cfg.ntp_offset;
+}
+
+
 static void buildClockText(char* out, size_t outLen) {
-    int h = ntpClient.getHours();
-    int m = ntpClient.getMinutes();
-    int s = ntpClient.getSeconds();
+    unsigned long local = (unsigned long)ntpClient.getEpochTime() + (unsigned long)currentUtcOffset();
+    int s   = (int)(local % 60);
+    int mn  = (int)((local / 60) % 60);
+    int h   = (int)((local / 3600) % 24);
     char sep = (s % 2 == 0) ? ':' : ' ';
-    snprintf(out, outLen, "%02d%c%02d", h, sep, m);
+    snprintf(out, outLen, "%02d%c%02d", h, sep, mn);
 }
 
 // =============================================================
@@ -345,7 +396,7 @@ static void buildScrollText(const JsonDocument& doc, char* out, size_t outLen) {
 
     float temp = doc["temperature"]      | 0.0f;
     float pool = doc["pool_temperature"] | -99.0f;
-    const char* ts = doc["timestamp"]   | "";
+    const char* ts = doc["created_at"] | "";
 
     out[0] = '\0';
 
@@ -487,13 +538,16 @@ void setup() {
     // NTP starten
     ntpClient.setPoolServerName(CFG_DEFAULT_NTP_SERVER);
     ntpClient.begin();
-    ntpClient.setTimeOffset(cfg.ntp_offset);  // nach begin(), sonst wird Offset zurückgesetzt
-    // Auf erste gültige Zeit warten (max. 5 s)
+    ntpClient.setTimeOffset(0);  // Offset wird per currentUtcOffset() manuell berechnet
+    // Auf erste gueltige Zeit warten (max. 5 s)
     {
         unsigned long t = millis();
         while (!ntpClient.update() && millis() - t < 5000) { delay(100); yield(); }
     }
-    Serial.printf("NTP: %s (Offset %lds)\n", ntpClient.getFormattedTime().c_str(), cfg.ntp_offset);
+    Serial.printf("NTP: %s (Offset %lds, %s)\n",
+        ntpClient.getFormattedTime().c_str(),
+        currentUtcOffset(),
+        isCEST((unsigned long)ntpClient.getEpochTime()) ? "CEST" : "CET");
 
     // Erster API-Abruf
     strncpy(scrollText, "Lade Daten...", sizeof(scrollText));
