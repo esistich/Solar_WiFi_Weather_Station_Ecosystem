@@ -25,7 +25,7 @@ Läuft direkt auf one.com Shared Hosting (PHP 8 + MySQL).
    - [console.firebase.google.com](https://console.firebase.google.com) → Projekt anlegen
    - Android-App registrieren, `google-services.json` nach `app/android/app/` kopieren
    - **Projekteinstellungen → Service-Konten → Neuen privaten Schlüssel generieren**
-   - Heruntergeladene JSON-Datei als `firebase_service_account.json` nach `sws/api/` hochladen  
+   - Heruntergeladene JSON-Datei (`swsfb-11c77-firebase-adminsdk-fbsvc-7dc4d2384c.json`) nach `sws/api/` hochladen  
      (eine Ebene oberhalb von `backend/`, per `.htaccess` geschützt)
    - Die `project_id` wird automatisch aus der JSON gelesen – kein manuelles Eintragen nötig
 

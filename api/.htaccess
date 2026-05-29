@@ -18,6 +18,6 @@ Options -Indexes
 </FilesMatch>
 
 # Service-Account-JSON vor Direktzugriff schützen
-<FilesMatch "firebase_service_account\.json$">
+<FilesMatch "swsfb-11c77-firebase-adminsdk-fbsvc-7dc4d2384c\.json$">
 	Require all denied
 </FilesMatch>
