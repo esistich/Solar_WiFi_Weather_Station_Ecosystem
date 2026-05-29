@@ -515,11 +515,36 @@ void setup() {
     dispState    = STATE_CLOCK;
     stateStartMs = millis();
 }
+// =============================================================
+//  Progressbar: unterste Zeile Matrix 1+2 (16 LEDs)
+//  Fuellt sich waehrend der Uhrphase von links nach rechts.
+// =============================================================
+static void updateProgressBar(unsigned long elapsedMs, unsigned long totalMs) {
+    // 16 LEDs = je 8 in Matrix 1 (mittig-links) und Matrix 2 (mittig-rechts)
+    uint8_t lit = (uint8_t)((elapsedMs * 16UL) / totalMs);
+    if (lit > 16) lit = 16;
 
-// =============================================================
-//  loop()
-// =============================================================
-void loop() {
+    // Matrix 1: Bits 7..0 von links fuellen
+    uint8_t row1 = 0x00;
+    if (lit >= 8) {
+        row1 = 0xFF;
+    } else if (lit > 0) {
+        // lit Bits von links (MSB) setzen
+        row1 = (uint8_t)(0xFF << (8 - lit));
+    }
+
+    // Matrix 2: verbleibende LEDs
+    uint8_t row2 = 0x00;
+    if (lit > 8) {
+        uint8_t rest = lit - 8;
+        row2 = (uint8_t)(0xFF << (8 - rest));
+    }
+
+    mx.setRow(1, 7, row1);
+    mx.setRow(2, 7, row2);
+}
+
+
     // Config-Button (D3/GPIO0): 2 Sekunden gedrückt halten -> Config-Portal
     static unsigned long btnPressedMs = 0;
     if (digitalRead(CONFIG_BUTTON_PIN) == LOW) {
@@ -574,6 +599,8 @@ void loop() {
             lastClockUpdate = millis();
             buildClockText(clockText, sizeof(clockText));
             display.displayText(clockText, PA_CENTER, 0, 0, PA_PRINT);
+            updateProgressBar(millis() - stateStartMs,
+                              (unsigned long)CLOCK_DISPLAY_SEC * 1000UL);
         }
         display.displayAnimate();
 
@@ -594,6 +621,9 @@ void loop() {
                 }
             }
             strncat(scrollText, pendingText, sizeof(scrollText) - strlen(scrollText) - 1);
+            // Progressbar loeschen
+            mx.setRow(1, 7, 0x00);
+            mx.setRow(2, 7, 0x00);
             display.displayScroll(scrollText, PA_LEFT, PA_SCROLL_LEFT, cfg.scroll_ms);
             dispState    = STATE_SCROLL;
             stateStartMs = millis();
