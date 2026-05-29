@@ -412,6 +412,29 @@ static void buildScrollText(const JsonDocument& doc, char* out, size_t outLen) {
 }
 
 // =============================================================
+//  HTTP-Antwort verarbeiten (Hilfsfunktion fuer fetchData)
+// =============================================================
+static void processHttpResponse(HTTPClient& http) {
+    int code = http.GET();
+    if (code == HTTP_CODE_OK) {
+        StaticJsonDocument<1024> doc;
+        if (deserializeJson(doc, http.getStream()) == DeserializationError::Ok) {
+            buildScrollText(doc, pendingText, sizeof(pendingText));
+            newDataReady = true;
+            errorApi     = false;
+            Serial.println(F("Daten aktualisiert."));
+        } else {
+            errorApi = true;
+            Serial.println(F("JSON-Fehler"));
+        }
+    } else {
+        errorApi = true;
+        Serial.printf("HTTP-Fehler: %d\n", code);
+    }
+    http.end();
+}
+
+// =============================================================
 //  API-Daten abrufen
 // =============================================================
 static void fetchData() {
@@ -425,39 +448,19 @@ static void fetchData() {
     }
     errorWifi = false;
 
-    auto handleResponse = [](HTTPClient& http) {
-        int code = http.GET();
-        if (code == HTTP_CODE_OK) {
-            StaticJsonDocument<1024> doc;
-            if (deserializeJson(doc, http.getStream()) == DeserializationError::Ok) {
-                buildScrollText(doc, pendingText, sizeof(pendingText));
-                newDataReady = true;
-                errorApi = false;
-                Serial.println(F("Daten aktualisiert."));
-            } else {
-                errorApi = true;
-                Serial.println(F("JSON-Fehler"));
-            }
-        } else {
-            errorApi = true;
-            Serial.printf("HTTP-Fehler: %d\n", code);
-        }
-        http.end();
-    };
-
     if (cfg.api_https) {
         WiFiClientSecure client;
         client.setInsecure();
         HTTPClient http;
         http.begin(client, String("https://") + cfg.api_host + cfg.api_path);
         http.setTimeout(8000);
-        handleResponse(http);
+        processHttpResponse(http);
     } else {
         WiFiClient client;
         HTTPClient http;
         http.begin(client, String("http://") + cfg.api_host + cfg.api_path);
         http.setTimeout(8000);
-        handleResponse(http);
+        processHttpResponse(http);
     }
 }
 
