@@ -254,7 +254,7 @@ double DewpointTemperature;
 float DewPointSpread;               // Difference between actual temperature and dewpoint
 
 //variables for trend calculation
-unsigned long current_timestamp;    // Actual timestamp read from NTPtime_t now;
+unsigned long current_timestamp;    // UTC-Timestamp von NTP (Sekunden seit 1.1.1970)
 unsigned long saved_timestamp;      // Timestamp stored in SPIFFS
 float pressure_value[12];           // Array for the historical pressure values (6 hours, all 30 mins), where as pressure_value[0] is always the most recent value
 float pressure_difference[12];      // Array to calculate trend with pressure differences
@@ -583,22 +583,23 @@ void setup() {
   }
   current_timestamp = ntpClient.getUnixTime();      // get UNIX timestamp (seconds from 1.1.1970 on)
 
-  Serial.print("Current UNIX Timestamp: ");
+  Serial.print("Current UNIX Timestamp (UTC): ");
   Serial.println(current_timestamp);
 
-  Serial.print("Time & Date: ");
-  Serial.print(hour(current_timestamp));
+  unsigned long localTs = localTimestamp(current_timestamp);
+  Serial.print("Zeit (CET/CEST): ");
+  Serial.print(hour(localTs));
   Serial.print(":");
-  Serial.print(minute(current_timestamp));
+  Serial.print(minute(localTs));
   Serial.print(":");
-  Serial.print(second(current_timestamp));
+  Serial.print(second(localTs));
   Serial.print("; ");
-  Serial.print(day(current_timestamp));
+  Serial.print(day(localTs));
   Serial.print(".");
-  Serial.print(month(current_timestamp));
+  Serial.print(month(localTs));
   Serial.print(".");
-  Serial.print(year(current_timestamp));
-  Serial.println(" Local timezone does not matter - we just need always the same timezone --> using UTC");
+  Serial.print(year(localTs));
+  Serial.println(isCEST(current_timestamp) ? " CEST" : " CET");
 
   //******** SENSOR INITIALISATION  ********************
 

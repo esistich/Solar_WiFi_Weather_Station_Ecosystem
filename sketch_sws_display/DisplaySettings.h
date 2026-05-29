@@ -4,7 +4,7 @@
 //  Compile-Zeit-Defaults – SWS Display-Sketch
 //  Alle Werte können zur Laufzeit per Config-Portal überschrieben
 //  werden (EEPROM). WiFi-Zugangsdaten werden NICHT hardcodiert –
-//  beim ersten Start den Config-Modus nutzen (D3/BOOT drücken).
+//  beim ersten Start den Config-Modus nutzen (D1/GPIO5-Taster drücken).
 // ============================================================
 
 // ------ Config-Portal ---------------------------------------
@@ -44,11 +44,11 @@
 #define DHT_PIN             4
 #define DHT_TYPE            DHT22
 
-#define CFG_DEFAULT_SCROLL_MS
+#define CFG_DEFAULT_SCROLL_MS 60
 
 // ------ NTP -------------------------------------------------
-#define CFG_DEFAULT_NTP_SERVER  "pool.ntp.org"
-#define CFG_DEFAULT_NTP_OFFSET  3600      // UTC+1 (Winterzeit); Sommerzeit = 7200
+#define CFG_DEFAULT_NTP_SERVER  "ptbtime1.ptb.de"
+#define CFG_DEFAULT_NTP_OFFSET  0         // 0 = Auto CET/CEST; 3600 = Winterzeit fix; 7200 = Sommerzeit fix
 
 // ------ Anzeigesteuerung ------------------------------------
 #define CLOCK_DISPLAY_SEC       30        // Sekunden Uhranzeige je Phase

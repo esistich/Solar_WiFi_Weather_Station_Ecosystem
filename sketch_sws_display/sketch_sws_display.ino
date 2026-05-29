@@ -19,7 +19,7 @@
  *   MAX7219 CLK  → D5  (GPIO14)
  *   MAX7219 DIN  → D7  (GPIO13)
  *   MAX7219 CS   → D8  (GPIO15)
- *   Config-Btn   → D3  (GPIO0)  – BOOT/FLASH-Taster
+ *   Config-Btn   → D1  (GPIO5)  – freier Pin (kein Boot-Einschraenkung)
  *
  * Bibliotheken (Arduino Library Manager):
  *   - MD_Parola  by MajicDesigns  (>= 3.7)
@@ -79,7 +79,6 @@ static bool errorApi  = false;
 // ------ DHT22 (Innenraumsensor) ------------------------------
 static DHT dht(DHT_PIN, DHT_TYPE);
 static float indoorTemp = NAN;
-static float indoorHum  = NAN;
 
 // ------ NTP --------------------------------------------------
 static WiFiUDP     ntpUdp;
@@ -92,10 +91,9 @@ static unsigned long stateStartMs    = 0;
 static bool          scrollDone      = false;
 
 // ------ Scroll-Puffer ----------------------------------------
-static char scrollText[512];   // API-Daten fuer Laufschrift
+static char scrollText[256];   // API-Daten fuer Laufschrift
 static char clockText[12];     // Uhrzeit fuer statische Anzeige
-static char pendingText[512];
-static bool newDataReady    = false;
+static char pendingText[256];
 static unsigned long lastFetch = 0;
 
 // =============================================================
@@ -106,8 +104,8 @@ static void applyDefaults() {
     strlcpy(cfg.wifi_pass,  CFG_DEFAULT_WIFI_PASS,  sizeof(cfg.wifi_pass));
     strlcpy(cfg.api_host,   CFG_DEFAULT_API_HOST,   sizeof(cfg.api_host));
     strlcpy(cfg.api_path,   CFG_DEFAULT_API_PATH,   sizeof(cfg.api_path));
-    cfg.api_https  = CFG_DEFAULT_API_HTTPS;
-    cfg.fetch_sec      = CFG_DEFAULT_FETCH_SEC;
+    cfg.api_https     = CFG_DEFAULT_API_HTTPS;
+    cfg.fetch_sec     = CFG_DEFAULT_FETCH_SEC;
     cfg.intensity_min = CFG_DEFAULT_INTENSITY_MIN;
     cfg.intensity_max = CFG_DEFAULT_INTENSITY_MAX;
     cfg.scroll_ms     = CFG_DEFAULT_SCROLL_MS;
@@ -298,35 +296,6 @@ input[type=checkbox]{width:18px;height:18px}
 }
 
 // =============================================================
-//  Umlaute und Sonderzeichen für 7-Segment-kompatible ASCII-Font ersetzen
-// =============================================================
-static void replaceUmlauts(const char* src, char* dst, size_t dstLen) {
-    size_t di = 0;
-    for (size_t si = 0; src[si] && di < dstLen - 1; ) {
-        unsigned char c  = (unsigned char)src[si];
-        unsigned char c2 = (unsigned char)src[si + 1];
-        // UTF-8 Zweibyte-Sequenzen (0xC3 xx)
-        if (c == 0xC3 && di + 2 < dstLen) {
-            switch (c2) {
-                case 0xA4: dst[di++] = 'a'; dst[di++] = 'e'; break;  // ä
-                case 0x84: dst[di++] = 'A'; dst[di++] = 'e'; break;  // Ä
-                case 0xB6: dst[di++] = 'o'; dst[di++] = 'e'; break;  // ö
-                case 0x96: dst[di++] = 'O'; dst[di++] = 'e'; break;  // Ö
-                case 0xBC: dst[di++] = 'u'; dst[di++] = 'e'; break;  // ü
-                case 0x9C: dst[di++] = 'U'; dst[di++] = 'e'; break;  // Ü
-                case 0x9F: dst[di++] = 's'; dst[di++] = 's'; break;  // ß
-                default:   dst[di++] = '?'; break;
-            }
-            si += 2;
-        } else {
-            dst[di++] = (char)c;
-            si++;
-        }
-    }
-    dst[di] = '\0';
-}
-
-// =============================================================
 //  Europaeische Sommerzeit (CET/CEST)
 //  Gibt true zurueck wenn CEST aktiv ist (letzter So. Maerz bis letzter So. Oktober)
 // =============================================================
@@ -378,7 +347,9 @@ static long currentUtcOffset() {
     return cfg.ntp_offset;
 }
 
-
+// =============================================================
+//  Uhrzeit-Text aufbauen (HH:MM mit blinkender Trennung)
+// =============================================================
 static void buildClockText(char* out, size_t outLen) {
     unsigned long local = (unsigned long)ntpClient.getEpochTime() + (unsigned long)currentUtcOffset();
     int s   = (int)(local % 60);
@@ -393,12 +364,13 @@ static void buildClockText(char* out, size_t outLen) {
 // =============================================================
 static void buildScrollText(const JsonDocument& doc, char* out, size_t outLen) {
     char tmp[20];
-    char tsBuf[24] = "";
+    char tsBuf[20] = "";
 
     float temp = doc["temperature"]      | 0.0f;
     float pool = doc["pool_temperature"] | -99.0f;
     const char* tsRaw = doc["created_at"] | "";
     strncpy(tsBuf, tsRaw, sizeof(tsBuf) - 1);
+    tsBuf[sizeof(tsBuf) - 1] = '\0';
 
     out[0] = '\0';
 
@@ -434,8 +406,7 @@ static void processHttpResponse(HTTPClient& http) {
         StaticJsonDocument<1024> doc;
         if (deserializeJson(doc, http.getStream()) == DeserializationError::Ok) {
             buildScrollText(doc, pendingText, sizeof(pendingText));
-            newDataReady = true;
-            errorApi     = false;
+            errorApi = false;
             Serial.println(F("Daten aktualisiert."));
         } else {
             errorApi = true;
@@ -479,6 +450,33 @@ static void fetchData() {
 }
 
 // =============================================================
+//  Progressbar: unterste Zeile Matrix 1+2 (16 LEDs)
+//  Fuellt sich waehrend der Uhrphase von links nach rechts.
+// =============================================================
+static void updateProgressBar(unsigned long elapsedMs, unsigned long totalMs) {
+    uint8_t lit = (uint8_t)((elapsedMs * 16UL) / totalMs);
+    if (lit > 16) lit = 16;
+
+    // FC16_HW: Modul 2 = mittig-links, Modul 1 = mittig-rechts
+    // Modul 3 (links) und Modul 0 (rechts) sind fuer Fehler-LEDs reserviert
+    // Progressbar laeuft von links (Modul 2, MSB) nach rechts (Modul 1, LSB)
+    uint8_t rowL = 0x00;  // Modul 2
+    uint8_t rowR = 0x00;  // Modul 1
+    if (lit >= 8) {
+        rowL = 0xFF;
+    } else if (lit > 0) {
+        rowL = (uint8_t)(0xFF << (8 - lit));
+    }
+    if (lit > 8) {
+        uint8_t rest = lit - 8;
+        rowR = (uint8_t)(0xFF << (8 - rest));
+    }
+
+    mx.setRow(2, 7, rowL);
+    mx.setRow(1, 7, rowR);
+}
+
+// =============================================================
 //  setup()
 // =============================================================
 void setup() {
@@ -501,7 +499,6 @@ void setup() {
     display.setIntensity((cfg.intensity_min + cfg.intensity_max) / 2);
     display.displayClear();
     display.setTextAlignment(PA_LEFT);
-    display.setSpeed(cfg.scroll_ms);
     display.setPause(1500);
 
     // Config-Portal starten wenn Button beim Boot gedrückt
@@ -556,15 +553,8 @@ void setup() {
     // Erster API-Abruf
     strncpy(scrollText, "Lade Daten...", sizeof(scrollText));
     display.displayScroll(scrollText, PA_LEFT, PA_SCROLL_LEFT, cfg.scroll_ms);
+    pendingText[0] = '\0';
     fetchData();
-    if (newDataReady) {
-        newDataReady = false;
-    } else {
-        pendingText[0] = '\0';
-    }
-    // entfernt
-    // entfernt
-    // entfernt
     lastFetch = millis();
 
     // Start im Uhrmodus
@@ -572,33 +562,6 @@ void setup() {
     display.displayText(clockText, PA_CENTER, 0, 0, PA_PRINT);
     dispState    = STATE_CLOCK;
     stateStartMs = millis();
-}
-// =============================================================
-//  Progressbar: unterste Zeile Matrix 1+2 (16 LEDs)
-//  Fuellt sich waehrend der Uhrphase von links nach rechts.
-// =============================================================
-static void updateProgressBar(unsigned long elapsedMs, unsigned long totalMs) {
-    uint8_t lit = (uint8_t)((elapsedMs * 16UL) / totalMs);
-    if (lit > 16) lit = 16;
-
-    // FC16_HW: Modul 2 = mittig-links, Modul 1 = mittig-rechts
-    // Modul 3 (links) und Modul 0 (rechts) sind fuer Fehler-LEDs reserviert
-    // Progressbar laeuft von links (Modul 2, MSB) nach rechts (Modul 1, LSB)
-    uint8_t rowL = 0x00;  // Modul 2
-    uint8_t rowR = 0x00;  // Modul 1
-    if (lit >= 8) {
-        rowL = 0xFF;
-    } else if (lit > 0) {
-        rowL = (uint8_t)(0xFF << (8 - lit));
-    }
-    if (lit > 8) {
-        uint8_t rest = lit - 8;
-        rowR = (uint8_t)(0xFF << (8 - rest));
-    }
-
-    mx.setRow(2, 7, rowL);
-    mx.setRow(1, 7, rowR);
-}
 
 // =============================================================
 //  loop()
@@ -631,9 +594,7 @@ void loop() {
     if (millis() - lastDht >= 5000UL) {
         lastDht = millis();
         float t = dht.readTemperature();
-        float h = dht.readHumidity();
         if (!isnan(t)) indoorTemp = t;
-        if (!isnan(h)) indoorHum  = h;
     }
 
     // Periodischer API-Abruf (im Hintergrund, blockiert Anzeige nicht)
@@ -644,13 +605,6 @@ void loop() {
 
     // NTP periodisch aktualisieren
     ntpClient.update();
-
-    // Neue API-Daten merken (werden beim naechsten Scroll-Start mit DHT kombiniert)
-    if (newDataReady) {
-        newDataReady = false;
-        Serial.print(F("pendingText: "));
-        Serial.println(pendingText);
-    }
 
     // ---- Zustandsmaschine ----
     if (dispState == STATE_CLOCK) {
@@ -675,12 +629,7 @@ void loop() {
                 strncat(scrollText, "Innen:", sizeof(scrollText) - strlen(scrollText) - 1);
                 dtostrf(indoorTemp, 1, 1, tmp);
                 strncat(scrollText, tmp, sizeof(scrollText) - strlen(scrollText) - 1);
-                strncat(scrollText, "\xB0""C ", sizeof(scrollText) - strlen(scrollText) - 1);
-                if (!isnan(indoorHum)) {
-                    dtostrf(indoorHum, 1, 0, tmp);
-                    strncat(scrollText, tmp, sizeof(scrollText) - strlen(scrollText) - 1);
-                    strncat(scrollText, "%  ", sizeof(scrollText) - strlen(scrollText) - 1);
-                }
+                strncat(scrollText, "\xB0""C  ", sizeof(scrollText) - strlen(scrollText) - 1);
             }
             strncat(scrollText, pendingText, sizeof(scrollText) - strlen(scrollText) - 1);
             // Progressbar loeschen
@@ -712,8 +661,9 @@ void loop() {
     }
 
     // ---- LED-Statusanzeige ----
-    // Unterste Zeile Matrix 0 (links)  = WLAN-Fehler
-    // Unterste Zeile Matrix 3 (rechts) = API-Fehler
+    // FC16_HW: Modul 3 = ganz links, Modul 0 = ganz rechts
+    // Unterste Zeile Modul 3 (links)  = WLAN-Fehler
+    // Unterste Zeile Modul 0 (rechts) = API-Fehler
     static bool lastErrorWifi = false;
     static bool lastErrorApi  = false;
     if (errorWifi != lastErrorWifi || errorApi != lastErrorApi) {
