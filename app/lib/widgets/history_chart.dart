@@ -1,4 +1,4 @@
-import 'package:fl_chart/fl_chart.dart';
+ï»¿import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import '../models/models.dart';
 
@@ -13,7 +13,7 @@ double _xInterval(int len) {
 }
 
 Widget _timeLabel(double value, TitleMeta meta, List<MeasurementPoint> pts) {
-  // min/max-Werte werden von fl_chart extra gerendert und überlagern sich –
+  // min/max-Werte werden von fl_chart extra gerendert und Ã¼berlagern sich â€“
   // diese einfach leer lassen
   if (value == meta.min || value == meta.max) return const SizedBox.shrink();
   final idx = value.toInt().clamp(0, pts.length - 1);
@@ -95,11 +95,11 @@ class MetricChart extends StatelessWidget {
     final values = spots.map((s) => s.y).toList();
     final raw_min = values.reduce((a, b) => a < b ? a : b);
     final raw_max = values.reduce((a, b) => a > b ? a : b);
-    final range   = (raw_max - raw_min).clamp(1, double.infinity);
-    final pad     = (range * 0.1).clamp(1, 10).ceilToDouble();
+    final range   = (raw_max - raw_min).clamp(1.0, double.infinity);
+    final pad     = (range * 0.1).clamp(1.0, 10.0).ceilToDouble();
     final minY    = (raw_min - pad).floorToDouble();
     final maxY    = (raw_max + pad).ceilToDouble();
-    final yInterval = ((maxY - minY) / 4).ceilToDouble().clamp(1, 9999);
+    final yInterval = ((maxY - minY) / 4).ceilToDouble().clamp(1.0, 9999.0);
 
     // reservedSize dynamisch: breitestes Label bestimmt den Platz
     final widestLabel = intValues
@@ -228,13 +228,13 @@ class HistoryChart extends StatelessWidget {
                   showTitles: true,
                   reservedSize: 36,
                   interval: 2,
-                  getTitlesWidget: (v, m) => _valueLabel(v, m, '°', false),
+                  getTitlesWidget: (v, m) => _valueLabel(v, m, 'Â°', false),
                 ),
               ),
               topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
               rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
             ),
-            gridData: _grid(2),
+            gridData: _grid(2.0),
             borderData: FlBorderData(show: false),
             lineBarsData: [
               _lineBar(outsideSpots, Colors.orange),
@@ -248,7 +248,7 @@ class HistoryChart extends StatelessWidget {
                   final t     = sorted[idx].time;
                   final label = s.barIndex == 0 ? 'Aussen' : 'Wasser';
                   return LineTooltipItem(
-                    '$label: ${s.y.toStringAsFixed(1)} °C\n'
+                    '$label: ${s.y.toStringAsFixed(1)} Â°C\n'
                     '${t.hour.toString().padLeft(2, '0')}:'
                     '${t.minute.toString().padLeft(2, '0')}',
                     const TextStyle(fontSize: 11),
@@ -267,3 +267,4 @@ class HistoryChart extends StatelessWidget {
         decoration: BoxDecoration(color: color, shape: BoxShape.circle),
       );
 }
+
