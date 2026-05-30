@@ -287,7 +287,7 @@ static bool isCEST(unsigned long utcEpoch) {
     int dom = (int)d + 1;
     m++;
     uint8_t ld = dim[m - 1]; if (m == 2 && leap) ld = 29;
-    int dowLd  = (dow - (dom - ld) % 7 + 7) % 7;
+    int dowLd  = (dow + (ld - dom) % 7 + 7) % 7;
     int lastSun = ld - dowLd;
     if (m < 3 || m > 10) return false;
     if (m > 3 && m < 10) return true;
@@ -1169,7 +1169,7 @@ void sendToAPI() {
   jsonDoc["battery"]         = volt;
   jsonDoc["batterypercentage"]= batterypercentage;
   jsonDoc["wifi_strength"]   = (int)WiFi.RSSI();
-  jsonDoc["timestamp"]       = localTimestamp(current_timestamp);
+  jsonDoc["timestamp"]       = current_timestamp;  // UTC Unix-Timestamp (API erwartet UTC)
 
   char payload[640];
   serializeJson(jsonDoc, payload);

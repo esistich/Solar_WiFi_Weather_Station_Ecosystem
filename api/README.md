@@ -8,26 +8,111 @@ PHP/MySQL-API zur Speicherung und Abfrage der Messdaten der Solar WiFi Weather S
 
 | Komponente | Version |
 |---|---|
-| PHP | 8.0 oder neuer |
+| PHP | 8.1 oder neuer |
 | MySQL / MariaDB | 8.0 / 10.5 oder neuer |
-| Webserver | Apache (mod_rewrite nicht erforderlich) oder nginx |
-| ESP8266-Sketch | V2.6 mit `USE_API 1` in `Settings26.h` |
+| Webserver | Apache mit `mod_rewrite` (one.com: Standard) |
+| ESP8266-Sketch | V2.6+ mit `USE_API 1` in `Settings26.h` |
 
 ---
 
-## Dateistruktur
+## Dateistruktur (v2)
 
 ```
 api/
-├── data.php            GET letzter Messwert / POST neuer Datensatz  ← Firmware-Endpoint
-├── history.php         GET Historienabfrage mit Filtern
-├── status.php          GET Health-Endpoint für Home Assistant (kein Auth)
-├── index.html          Platzhalter-Startseite
-├── .htaccess           HTTPS-Weiterleitung + Zugriffsschutz für lib/
-├── lib/
-│   ├── auth.php        Credentials + requireBasicAuth() + sendCorsHeaders()
-│   └── db.php          PDO-Datenbankverbindung (Singleton)
-├── homeassistant/
+├── data.php            Shim → /v1/data  (Firmware-Endpunkt, abwärtskompatibel)
+├── history.php         Shim → /v1/history
+├── status.php          Shim → /v1/status
+├── .htaccess           HTTPS-Weiterleitung + Zugriffsschutz
+│
+├── config/             ← NICHT committen (enthält echte Credentials)
+│   ├── db.php          PDO-Verbindung  (aus db.example.php anlegen)
+│   ├── auth.php        Basic Auth + JWT + Admin-Passwort  (aus auth.example.php anlegen)
+│   ├── jwt.php         JWT-Helfer (HS256, kein Composer)
+│   ├── db.example.php  → Vorlage für db.php
+│   └── auth.example.php→ Vorlage für auth.php
+│
+├── v1/                 Neue einheitliche API (kanonische Endpunkte)
+│   ├── .htaccess       URL-Rewrite → index.php
+│   ├── index.php       Router
+│   ├── data.php        GET/POST Messdaten (EAV-Schema)
+│   ├── history.php     GET Historien-Abfrage
+│   ├── status.php      GET Health-Check
+│   ├── stations.php    GET Stationsliste
+│   ├── metrics.php     GET Metrik-Definitionen
+│   └── auth/           Login, Register, Push, Invite
+│
+├── admin/              Admin-Dashboard (Session-Auth)
+│   ├── index.php       Einstiegspunkt + Dashboard-HTML
+│   ├── api.php         Admin-JSON-API (Stationen, Metriken, User, Invite, Live)
+│   └── assets/         admin.css, admin.js
+│
+└── install/
+    ├── schema.sql      Original-Schema (v1, Flat-Columns)
+    └── migrate_v2.sql  Migration auf EAV-Schema (stations, measurement_values, metric_definitions)
+```
+
+---
+
+## Deployment (Ersteinrichtung)
+
+1. **Config-Dateien anlegen**
+   ```bash
+   cp api/config/db.example.php     api/config/db.php
+   cp api/config/auth.example.php   api/config/auth.php
+   ```
+   Werte in `db.php` und `auth.php` mit echten Credentials füllen.
+   `ADMIN_PASS_HASH` mit `password_hash('meinPasswort', PASSWORD_DEFAULT)` erzeugen.
+
+2. **Datenbank einrichten**
+   ```bash
+   # Neues Projekt:
+   mysql -u user -p dbname < api/install/schema.sql
+   mysql -u user -p dbname < api/install/migrate_v2.sql
+
+   # Bestehende Installation:
+   mysql -u user -p dbname < api/install/migrate_v2.sql
+   ```
+
+3. **Alle Dateien auf den Server hochladen** (außer `api/config/db.php` und `auth.php` – diese manuell übertragen oder via SFTP/SSH befüllen).
+
+4. **Admin-Dashboard aufrufen:** `https://dein-server.de/api/admin/`
+
+---
+
+## API-Endpunkte (v1)
+
+| Methode | Pfad | Auth | Beschreibung |
+|---------|------|------|--------------|
+| GET | `/v1/data?station=slug` | – | Letzter Messwert |
+| POST | `/v1/data` | Basic Auth | Neuen Messwert speichern |
+| GET | `/v1/history?station=slug&from=…&to=…` | – | Historische Daten |
+| GET | `/v1/status?station=slug` | – | Health-Check |
+| GET | `/v1/stations` | Basic Auth | Stationsliste |
+| GET | `/v1/metrics` | – | Metrik-Definitionen |
+| POST | `/v1/auth/login` | – | JWT anfordern |
+| POST | `/v1/auth/register` | – | Registrierung mit Invite-Code |
+| POST | `/v1/auth/push_register` | JWT | FCM-Token speichern |
+| POST | `/v1/auth/invite_create` | JWT | Invite-Code erzeugen |
+
+### Legacy-Pfade (abwärtskompatibel)
+
+| Methode | Pfad | Bemerkung |
+|---------|------|-----------|
+| GET/POST | `/api/data.php` | Sketch-Feldnamen werden automatisch übersetzt |
+| GET | `/api/history.php` | |
+| GET | `/api/status.php` | |
+
+---
+
+## Dynamische Metriken (neu in v2)
+
+Zukünftige Sensoren können ohne DB-Schema-Änderung hinzugefügt werden:
+
+1. Im Admin-Dashboard unter **Metriken** einen neuen Eintrag anlegen.
+2. Sketch sendet einfach den neuen Schlüssel im JSON-POST-Body.
+3. Der Wert wird automatisch in `measurement_values` gespeichert und taucht in History und Live-Dashboard auf.
+
+
 │   └── ha_sensors.yaml Fertige Home-Assistant-Sensor-Konfiguration
 ├── install/
 │   └── schema.sql      Datenbank-Schema (einmalig importieren)

@@ -1,9 +1,23 @@
 # ============================================================
-# Solar WiFi Weather Station – API Verzeichnisschutz
+# Solar WiFi Weather Station – API Verzeichnisschutz + Routing
 # ============================================================
 
-# Verzeichnislisting deaktivieren
 Options -Indexes
+
+# ---- v1 URL-Rewriting ----
+RewriteEngine On
+RewriteBase /sws/api
+
+# Authorization-Header an PHP weitergeben (CGI/FastCGI auf Shared Hosting)
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# /v1/<route> → v1/index.php (außer echte Dateien)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^v1/(.*)$ v1/index.php [QSA,L]
+
+# ---- Zugriffsschutz ----
 
 # auth.php und db.php vor Direktzugriff schützen
 <FilesMatch "^(auth|db)\.php$">
@@ -11,7 +25,6 @@ Options -Indexes
 </FilesMatch>
 
 # Service-Account-JSON vor Direktzugriff schützen
-<FilesMatch "swsfb-11c77-firebase-adminsdk-fbsvc-7dc4d2384c\.json$">
+<FilesMatch "\.json$">
 	Require all denied
 </FilesMatch>
-

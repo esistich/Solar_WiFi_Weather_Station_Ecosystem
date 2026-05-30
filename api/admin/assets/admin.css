@@ -1,0 +1,75 @@
+/* ===== SWS Admin Dashboard – CSS ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #0f1117;
+  --surface:  #1a1d27;
+  --border:   #2d3147;
+  --accent:   #f5a623;
+  --text:     #e2e8f0;
+  --muted:    #8892a4;
+  --danger:   #e15759;
+  --success:  #59a14f;
+  --sidebar-w: 220px;
+}
+
+body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* ---- Login ---- */
+.login-page { display: flex; align-items: center; justify-content: center; }
+.login-card  { background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+               padding: 2.5rem; width: 360px; display: flex; flex-direction: column; gap: 1.2rem; }
+.login-card h1 { font-size: 1.6rem; text-align: center; }
+.login-card label { display: flex; flex-direction: column; gap: .35rem; font-size: .85rem; color: var(--muted); }
+.login-card input { padding: .55rem .8rem; background: var(--bg); border: 1px solid var(--border);
+                    border-radius: 6px; color: var(--text); font-size: 1rem; }
+.login-card button { padding: .65rem; background: var(--accent); border: none; border-radius: 6px;
+                     cursor: pointer; font-weight: 600; font-size: 1rem; }
+.error { color: var(--danger); font-size: .88rem; }
+
+/* ---- Layout ---- */
+.sidebar { position: fixed; top: 0; left: 0; width: var(--sidebar-w); height: 100vh;
+           background: var(--surface); border-right: 1px solid var(--border);
+           display: flex; flex-direction: column; padding: 1.5rem 1rem; gap: .4rem; }
+.logo    { font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem; color: var(--accent); }
+.nav-link { display: block; padding: .55rem .75rem; border-radius: 6px; color: var(--muted);
+            text-decoration: none; font-size: .9rem; transition: background .15s, color .15s; }
+.nav-link:hover, .nav-link.active { background: var(--border); color: var(--text); }
+.nav-link.logout { margin-top: auto; color: var(--danger); }
+
+.content { margin-left: var(--sidebar-w); padding: 2rem; }
+.section  { max-width: 960px; }
+.section h2 { font-size: 1.3rem; margin-bottom: 1.2rem; }
+.hidden   { display: none !important; }
+
+/* ---- Tabellen ---- */
+table  { width: 100%; border-collapse: collapse; font-size: .88rem; }
+th, td { padding: .6rem .8rem; text-align: left; border-bottom: 1px solid var(--border); }
+th     { color: var(--muted); font-weight: 600; }
+tr:hover td { background: var(--surface); }
+.btn-del  { background: transparent; border: 1px solid var(--danger); color: var(--danger);
+            border-radius: 4px; padding: .25rem .6rem; cursor: pointer; font-size: .8rem; }
+.btn-del:hover { background: var(--danger); color: #fff; }
+.btn-add  { background: var(--accent); border: none; border-radius: 6px; padding: .5rem 1rem;
+            cursor: pointer; font-weight: 600; margin-bottom: 1rem; }
+
+/* ---- Live-Grid ---- */
+.live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; margin-top: 1.2rem; }
+.live-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+.live-card .val  { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
+.live-card .unit { font-size: .8rem; color: var(--muted); }
+.live-card .lbl  { font-size: .85rem; margin-top: .3rem; color: var(--text); }
+
+/* ---- Modal ---- */
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex;
+         align-items: center; justify-content: center; z-index: 100; }
+.modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+             padding: 2rem; width: 420px; display: flex; flex-direction: column; gap: 1rem; }
+.modal-box h3 { font-size: 1.1rem; }
+.modal-box label { display: flex; flex-direction: column; gap: .3rem; font-size: .85rem; color: var(--muted); }
+.modal-box input[type=text], .modal-box input[type=number] {
+  padding: .5rem .7rem; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text); font-size: .95rem; }
+.modal-actions { display: flex; gap: .75rem; justify-content: flex-end; margin-top: .5rem; }
+.btn-save { background: var(--success); border: none; border-radius: 6px; padding: .5rem 1.1rem;
+            cursor: pointer; font-weight: 600; color: #fff; }

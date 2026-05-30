@@ -1,0 +1,6 @@
+Options -Indexes
+# Alle Anfragen an index.php weiterleiten (ausser echte Dateien/Verzeichnisse)
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [L]

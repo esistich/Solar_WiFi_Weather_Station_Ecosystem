@@ -1,0 +1,9 @@
+Options -Indexes
+
+RewriteEngine On
+RewriteBase /sws/api/v1
+
+# Alle Requests an index.php weiterleiten (außer echte Dateien)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [QSA,L]

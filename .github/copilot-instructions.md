@@ -2,6 +2,7 @@
 
 ## Projektrichtlinien
 - Wenn neue Arduino-Bibliotheken im Sketch verwendet werden, diese direkt per PowerShell von GitHub herunterladen und nach C:\Users\EsIst\Documents\Arduino\libraries\ installieren – nicht nur erwähnen.
+- Nach jeder Änderung an Dateien im api/-Ordner automatisch den upload/-Ordner aktualisieren mit: `robocopy api upload /E /XF "db.php" "auth.php" "*adminsdk*.json" /XD "upload" "homeassistant"` – homeassistant/ gehört nicht auf den Server.
 
 ## Sicherheit & Secrets
 - `app/lib/firebase_options.dart`, `app/android/google-services.json`, `api/lib/auth.php`-Credentials und alle Dateien mit API-Keys/Passwörtern dürfen niemals committet werden.

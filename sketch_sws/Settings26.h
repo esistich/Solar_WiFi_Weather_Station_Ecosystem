@@ -73,7 +73,7 @@ const String Version = "2.7";
 #define CFG_DEFAULT_API_ENABLED   true
 #define CFG_DEFAULT_API_HTTPS     true
 #define CFG_DEFAULT_API_HOST      "timm-sander.net"
-#define CFG_DEFAULT_API_PATH      "/swsapi/data.php"
+#define CFG_DEFAULT_API_PATH      "/sws/api/data.php"
 #define CFG_DEFAULT_API_PORT      443
 #define CFG_DEFAULT_API_USER      "NAy1b4GpuS3dEvej"
 #define CFG_DEFAULT_API_PASS      "REDACTED_API_PASS"

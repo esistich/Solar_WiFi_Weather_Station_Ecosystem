@@ -1,3 +1,6 @@
+# Upload-Paket (lokal generiert, nicht committen)
+upload/
+
 # Visual Studio
 .vs/
 
@@ -12,3 +15,16 @@ jwt_secret.php
 *firebase*adminsdk*.json
 google-services.json
 upload_package.zip
+
+# API-Konfigurationsdateien mit echten Credentials (nur .example-Vorlagen committen)
+api/config/db.php
+api/config/auth.php
+api/lib/auth.php
+api/lib/db.php
+
+# Firebase Service-Account-Schlüssel
+api/*adminsdk*.json
+*adminsdk*.json
+
+# Flutter Firebase-Konfiguration (lokal regenerieren: flutterfire configure)
+app/lib/firebase_options.dart
