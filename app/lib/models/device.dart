@@ -8,6 +8,8 @@ class Device {
   final String apiPath;    // z.B. "/api/data.php"
   final bool apiHttps;
   final bool active;
+  final String apiUser;     // Basic-Auth Benutzername (leer = kein Auth)
+  final String apiPassword; // Basic-Auth Passwort
 
   const Device({
 	required this.id,
@@ -16,6 +18,8 @@ class Device {
 	required this.apiPath,
 	this.apiHttps = true,
 	this.active = true,
+	this.apiUser = '',
+	this.apiPassword = '',
   });
 
   String get apiUrl =>
@@ -34,6 +38,8 @@ class Device {
 	String? apiPath,
 	bool? apiHttps,
 	bool? active,
+	String? apiUser,
+	String? apiPassword,
   }) =>
 	  Device(
 		id: id,
@@ -42,6 +48,8 @@ class Device {
 		apiPath: apiPath ?? this.apiPath,
 		apiHttps: apiHttps ?? this.apiHttps,
 		active: active ?? this.active,
+		apiUser: apiUser ?? this.apiUser,
+		apiPassword: apiPassword ?? this.apiPassword,
 	  );
 
   Map<String, dynamic> toJson() => {
@@ -51,6 +59,8 @@ class Device {
 		'apiPath': apiPath,
 		'apiHttps': apiHttps,
 		'active': active,
+		'apiUser': apiUser,
+		'apiPassword': apiPassword,
 	  };
 
   factory Device.fromJson(Map<String, dynamic> json) => Device(
@@ -60,6 +70,8 @@ class Device {
 		apiPath: json['apiPath'] as String,
 		apiHttps: json['apiHttps'] as bool? ?? true,
 		active: json['active'] as bool? ?? true,
+		apiUser: json['apiUser'] as String? ?? '',
+		apiPassword: json['apiPassword'] as String? ?? '',
 	  );
 
   /// Serialisiert eine Liste von Geräten für SharedPreferences.

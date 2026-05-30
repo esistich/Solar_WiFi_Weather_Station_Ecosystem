@@ -22,10 +22,12 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   String? _error;
 
   // Formular-Felder
-  final _nameCtrl    = TextEditingController(text: 'Meine Station');
-  final _apiHostCtrl = TextEditingController();
-  final _apiPathCtrl = TextEditingController(text: '/api/data.php');
-  bool _apiHttps     = true;
+  final _nameCtrl     = TextEditingController(text: 'Meine Station');
+  final _apiHostCtrl  = TextEditingController();
+  final _apiPathCtrl  = TextEditingController(text: '/api/data.php');
+  final _apiUserCtrl  = TextEditingController();
+  final _apiPassCtrl  = TextEditingController();
+  bool _apiHttps      = true;
 
   // Soft-AP spezifisch
   final _ssidCtrl    = TextEditingController();
@@ -34,7 +36,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
 
   @override
   void dispose() {
-	for (final c in [_nameCtrl, _apiHostCtrl, _apiPathCtrl, _ssidCtrl, _passCtrl]) {
+	for (final c in [_nameCtrl, _apiHostCtrl, _apiPathCtrl, _apiUserCtrl, _apiPassCtrl, _ssidCtrl, _passCtrl]) {
 	  c.dispose();
 	}
 	super.dispose();
@@ -88,6 +90,8 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
 		  nameCtrl:    _nameCtrl,
 		  apiHostCtrl: _apiHostCtrl,
 		  apiPathCtrl: _apiPathCtrl,
+		  apiUserCtrl: _apiUserCtrl,
+		  apiPassCtrl: _apiPassCtrl,
 		  apiHttps:    _apiHttps,
 		  onHttpsChanged: (v) => setState(() => _apiHttps = v),
 		  busy:  _busy,
@@ -154,11 +158,13 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
 
   Future<void> _addDevice() async {
 	final device = Device(
-	  id:       const Uuid().v4(),
-	  name:     _nameCtrl.text.trim().isEmpty ? 'Station' : _nameCtrl.text.trim(),
-	  apiHost:  _apiHostCtrl.text.trim(),
-	  apiPath:  _apiPathCtrl.text.trim(),
-	  apiHttps: _apiHttps,
+	  id:          const Uuid().v4(),
+	  name:        _nameCtrl.text.trim().isEmpty ? 'Station' : _nameCtrl.text.trim(),
+	  apiHost:     _apiHostCtrl.text.trim(),
+	  apiPath:     _apiPathCtrl.text.trim(),
+	  apiHttps:    _apiHttps,
+	  apiUser:     _apiUserCtrl.text.trim(),
+	  apiPassword: _apiPassCtrl.text,
 	);
 	if (!mounted) return;
 	await context.read<DeviceProvider>().addDevice(device);
@@ -363,6 +369,8 @@ class _ManualSetup extends StatelessWidget {
   final TextEditingController nameCtrl;
   final TextEditingController apiHostCtrl;
   final TextEditingController apiPathCtrl;
+  final TextEditingController apiUserCtrl;
+  final TextEditingController apiPassCtrl;
   final bool apiHttps;
   final ValueChanged<bool> onHttpsChanged;
   final bool busy;
@@ -374,6 +382,8 @@ class _ManualSetup extends StatelessWidget {
 	required this.nameCtrl,
 	required this.apiHostCtrl,
 	required this.apiPathCtrl,
+	required this.apiUserCtrl,
+	required this.apiPassCtrl,
 	required this.apiHttps,
 	required this.onHttpsChanged,
 	required this.busy,
@@ -405,6 +415,19 @@ class _ManualSetup extends StatelessWidget {
 		  TextField(
 			controller: apiPathCtrl,
 			decoration: const InputDecoration(hintText: '/api/data.php'),
+		  ),
+		  const SizedBox(height: 12),
+		  _label('API-Benutzername (optional)'),
+		  TextField(
+			controller: apiUserCtrl,
+			decoration: const InputDecoration(hintText: 'Leer lassen wenn keine Auth'),
+		  ),
+		  const SizedBox(height: 12),
+		  _label('API-Passwort'),
+		  TextField(
+			controller: apiPassCtrl,
+			obscureText: true,
+			decoration: const InputDecoration(hintText: '••••••••'),
 		  ),
 		  const SizedBox(height: 12),
 		  SwitchListTile(

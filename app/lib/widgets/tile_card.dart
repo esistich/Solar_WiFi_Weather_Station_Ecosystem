@@ -157,13 +157,6 @@ class _MeasurementBody extends StatelessWidget {
 			value: measurement.poolTemperature!,
 			color: _tempColor(measurement.poolTemperature!),
 		  ),
-		if (measurement.indoorTemperature != null)
-		  _TempRow(
-			icon: Icons.home_outlined,
-			label: 'Innen',
-			value: measurement.indoorTemperature!,
-			color: _tempColor(measurement.indoorTemperature!),
-		  ),
 		const SizedBox(height: 8),
 		Row(
 		  children: [

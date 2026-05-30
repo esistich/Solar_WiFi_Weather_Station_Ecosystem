@@ -248,6 +248,8 @@ class _DeviceTile extends StatelessWidget {
 	final nameCtrl = TextEditingController(text: device.name);
 	final hostCtrl = TextEditingController(text: device.apiHost);
 	final pathCtrl = TextEditingController(text: device.apiPath);
+	final userCtrl = TextEditingController(text: device.apiUser);
+	final passCtrl = TextEditingController(text: device.apiPassword);
 	bool https = device.apiHttps;
 
 	showDialog(
@@ -267,6 +269,14 @@ class _DeviceTile extends StatelessWidget {
 				const SizedBox(height: 8),
 				TextField(controller: pathCtrl,
 					decoration: const InputDecoration(labelText: 'API-Pfad')),
+				const SizedBox(height: 8),
+				TextField(controller: userCtrl,
+					decoration: const InputDecoration(labelText: 'API-Benutzername')),
+				const SizedBox(height: 8),
+				TextField(
+					controller: passCtrl,
+					obscureText: true,
+					decoration: const InputDecoration(labelText: 'API-Passwort')),
 				const SizedBox(height: 4),
 				SwitchListTile(
 				  value: https,
@@ -283,10 +293,12 @@ class _DeviceTile extends StatelessWidget {
 			FilledButton(
 			  onPressed: () {
 				provider.updateDevice(device.copyWith(
-				  name:     nameCtrl.text.trim(),
-				  apiHost:  hostCtrl.text.trim(),
-				  apiPath:  pathCtrl.text.trim(),
-				  apiHttps: https,
+				  name:        nameCtrl.text.trim(),
+				  apiHost:     hostCtrl.text.trim(),
+				  apiPath:     pathCtrl.text.trim(),
+				  apiHttps:    https,
+				  apiUser:     userCtrl.text.trim(),
+				  apiPassword: passCtrl.text,
 				));
 				Navigator.pop(ctx);
 			  },

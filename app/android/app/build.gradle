@@ -1,3 +1,10 @@
+plugins {
+	id 'com.android.application'
+	id 'org.jetbrains.kotlin.android'
+	id 'dev.flutter.flutter-gradle-plugin'
+	id 'com.google.gms.google-services'
+}
+
 def localProperties = new Properties()
 def localPropertiesFile = rootProject.file('local.properties')
 if (localPropertiesFile.exists()) {
@@ -6,23 +13,16 @@ if (localPropertiesFile.exists()) {
 	}
 }
 
-def flutterRoot = localProperties.getProperty('flutter.sdk')
-assert flutterRoot != null, "Flutter SDK nicht gefunden. Bitte flutter.sdk in local.properties setzen."
-
 def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
 if (flutterVersionCode == null) { flutterVersionCode = '1' }
 
 def flutterVersionName = localProperties.getProperty('flutter.versionName')
 if (flutterVersionName == null) { flutterVersionName = '1.0' }
 
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
-apply plugin: 'com.google.gms.google-services'
 
 android {
-	namespace 'com.sws.companion'
-	compileSdkVersion 34
+	namespace 'net.timm_sander.sws'
+	compileSdkVersion 35
 
 	compileOptions {
 		sourceCompatibility JavaVersion.VERSION_1_8
@@ -38,9 +38,9 @@ android {
 	}
 
 	defaultConfig {
-		applicationId 'com.sws.companion'
+		applicationId 'net.timm_sander.sws'
 		minSdkVersion 26        // Android 8+ für WiFi-API
-		targetSdkVersion 34
+		targetSdkVersion 35
 		versionCode flutterVersionCode.toInteger()
 		versionName flutterVersionName
 	}
@@ -49,6 +49,11 @@ android {
 		release {
 			signingConfig signingConfigs.debug
 			minifyEnabled false
+			shrinkResources false
+		}
+		debug {
+			minifyEnabled false
+			shrinkResources false
 		}
 	}
 }
@@ -58,7 +63,6 @@ flutter {
 }
 
 dependencies {
-	implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
 	implementation platform('com.google.firebase:firebase-bom:33.1.2')
 	implementation 'com.google.firebase:firebase-messaging'
 }

@@ -1,0 +1,70 @@
+﻿<Solution>
+  <Folder Name="/Firmware/Station/">
+    <File Path="sketch_sws/Solar_WiFi_Weather_Station_v2_6.ino" />
+    <File Path="sketch_sws/Settings26.h" />
+    <File Path="sketch_sws/DisplaySettings.h" />
+    <File Path="sketch_sws/wiring.md" />
+    <File Path="sketch_sws/README.md" />
+  </Folder>
+  <Folder Name="/Firmware/Display/">
+    <File Path="sketch_sws_display/sketch_sws_display.ino" />
+    <File Path="sketch_sws_display/wiring.md" />
+  </Folder>
+  <Folder Name="/API/Endpoints/">
+    <File Path="api/data.php" />
+    <File Path="api/history.php" />
+    <File Path="api/status.php" />
+    <File Path="api/index.html" />
+    <File Path="api/.htaccess" />
+    <File Path="api/README.md" />
+  </Folder>
+  <Folder Name="/API/Lib/">
+    <File Path="api/lib/db.php" />
+    <File Path="api/lib/auth.php" />
+  </Folder>
+  <Folder Name="/API/Backend/">
+    <File Path="api/backend/index.php" />
+    <File Path="api/backend/auth.php" />
+    <File Path="api/backend/invite.php" />
+    <File Path="api/backend/push.php" />
+    <File Path="api/backend/jwt.php" />
+    <File Path="api/backend/db.php" />
+    <File Path="api/backend/README.md" />
+  </Folder>
+  <Folder Name="/App/">
+    <File Path="app/pubspec.yaml" />
+    <File Path="app/analysis_options.yaml" />
+    <File Path="app/lib/main.dart" />
+  </Folder>
+  <Folder Name="/App/Models/">
+    <File Path="app/lib/models/measurement.dart" />
+    <File Path="app/lib/models/device.dart" />
+    <File Path="app/lib/models/app_user.dart" />
+    <File Path="app/lib/models/models.dart" />
+  </Folder>
+  <Folder Name="/App/Screens/">
+    <File Path="app/lib/screens/home_screen.dart" />
+    <File Path="app/lib/screens/detail_screen.dart" />
+    <File Path="app/lib/screens/settings_screen.dart" />
+    <File Path="app/lib/screens/device_setup_screen.dart" />
+    <File Path="app/lib/screens/screens.dart" />
+  </Folder>
+  <Folder Name="/App/Widgets/">
+    <File Path="app/lib/widgets/tile_card.dart" />
+    <File Path="app/lib/widgets/history_chart.dart" />
+    <File Path="app/lib/widgets/widgets.dart" />
+  </Folder>
+  <Folder Name="/App/Services/">
+    <File Path="app/lib/services/api_service.dart" />
+    <File Path="app/lib/services/auth_service.dart" />
+    <File Path="app/lib/services/device_provider.dart" />
+    <File Path="app/lib/services/device_repository.dart" />
+    <File Path="app/lib/services/device_setup_service.dart" />
+    <File Path="app/lib/services/push_service.dart" />
+    <File Path="app/lib/services/services.dart" />
+  </Folder>
+  <Folder Name="/Docs/">
+    <File Path="README.md" />
+    <File Path="copilot-instructions.md" />
+  </Folder>
+</Solution>

@@ -97,25 +97,83 @@ class _DetailScreenState extends State<DetailScreen> {
 			),
 			const SizedBox(height: 16),
 
-			// Chart
-			SizedBox(
-			  height: 220,
-			  child: _loadingHistory
-				  ? const Center(child: CircularProgressIndicator())
-				  : _historyError != null
-					  ? Center(
-						  child: Text(
-							_historyError!,
-							style: const TextStyle(color: Colors.red),
-						  ),
-						)
-					  : HistoryChart(
-						  points: _history,
-						  showPool: _history.any(
-							(p) => p.poolTemperature != null,
-						  ),
-						),
-			),
+			// Charts
+			if (_loadingHistory)
+			  const SizedBox(
+				height: 100,
+				child: Center(child: CircularProgressIndicator()),
+			  )
+			else if (_historyError != null)
+			  Padding(
+				padding: const EdgeInsets.symmetric(vertical: 16),
+				child: Text(
+				  _historyError!,
+				  style: const TextStyle(color: Colors.red),
+				),
+			  )
+			else ...[
+				  _ChartCard(
+					title: 'Temperatur Aussen (BME280)',
+					height: 200,
+					child: MetricChart(
+					  points: _history,
+					  unit: ' °C',
+					  color: Colors.orange,
+					  getValue: (p) => p.temperature,
+					),
+				  ),
+				  if (_history.any((p) => p.poolTemperature != null)) ...[
+					const SizedBox(height: 16),
+					_ChartCard(
+					  title: 'Temperatur Wasser (DS18B20)',
+					  height: 200,
+					  child: MetricChart(
+						points: _history
+							.where((p) => p.poolTemperature != null)
+							.toList(),
+						unit: ' °C',
+						color: Colors.blue,
+						getValue: (p) => p.poolTemperature!,
+					  ),
+					),
+				  ],
+				  const SizedBox(height: 16),
+				  _ChartCard(
+					title: 'Luftfeuchte',
+					height: 180,
+					child: MetricChart(
+					  points: _history,
+					  unit: ' %',
+					  color: Colors.teal,
+					  getValue: (p) => p.humidity,
+					  intValues: true,
+					),
+				  ),
+				  const SizedBox(height: 16),
+				  _ChartCard(
+					title: 'Luftdruck (rel.)',
+					height: 180,
+					child: MetricChart(
+					  points: _history,
+					  unit: ' hPa',
+					  color: Colors.purple,
+					  getValue: (p) => p.relPressure,
+					  intValues: true,
+					),
+				  ),
+				  const SizedBox(height: 16),
+				  _ChartCard(
+					title: 'Batterie',
+					height: 180,
+					child: MetricChart(
+					  points: _history,
+					  unit: ' %',
+					  color: Colors.green,
+					  getValue: (p) => p.batteryPct.toDouble(),
+					  intValues: true,
+					),
+				  ),
+				],
 
 			const SizedBox(height: 24),
 
@@ -149,41 +207,46 @@ class _CurrentValues extends StatelessWidget {
 	}
 	if (measurement == null) return const Text('Keine Daten');
 
+	final m = measurement!;
 	return Card(
 	  child: Padding(
 		padding: const EdgeInsets.all(16),
 		child: Column(
 		  crossAxisAlignment: CrossAxisAlignment.start,
 		  children: [
-			Text(
-			  'Aktuelle Messung',
-			  style: Theme.of(context).textTheme.titleSmall,
-			),
-			const SizedBox(height: 12),
-			_row('Aussen', measurement!.temperature),
-			if (measurement!.poolTemperature != null)
-			  _row('Wasser', measurement!.poolTemperature!),
-			if (measurement!.indoorTemperature != null)
-			  _row('Innen', measurement!.indoorTemperature!),
-			const Divider(height: 20),
 			Row(
+			  mainAxisAlignment: MainAxisAlignment.spaceBetween,
 			  children: [
-				const Icon(Icons.opacity, size: 14, color: Colors.grey),
-				const SizedBox(width: 4),
-				Text('${measurement!.humidity.toStringAsFixed(0)} %',
-					style: const TextStyle(fontSize: 13)),
-				const SizedBox(width: 16),
-				const Icon(Icons.compress, size: 14, color: Colors.grey),
-				const SizedBox(width: 4),
-				Text('${measurement!.pressure.toStringAsFixed(1)} hPa',
-					style: const TextStyle(fontSize: 13)),
-				const Spacer(),
+				Text('Aktuelle Messung',
+					style: Theme.of(context).textTheme.titleSmall),
 				Text(
-				  'Stand: ${measurement!.timeShort} Uhr',
+				  'Stand: ${m.timeShort} Uhr',
 				  style: const TextStyle(fontSize: 12, color: Colors.grey),
 				),
 			  ],
 			),
+			const SizedBox(height: 12),
+			_row('Außen (BME280)', m.temperature),
+			if (m.poolTemperature != null)
+			  _row('Wasser (DS18B20)', m.poolTemperature!),
+			const Divider(height: 20),
+			_infoRow(Icons.opacity,
+				'Luftfeuchte', '${m.humidity.toStringAsFixed(1)} %'),
+			const SizedBox(height: 6),
+			_infoRow(Icons.compress,
+				'Rel. Luftdruck', '${m.relPressure.toStringAsFixed(0)} hPa  •  ${m.pressureState}'),
+			const SizedBox(height: 6),
+			_infoRow(Icons.trending_flat,
+				'Drucktrend', m.trend),
+			const SizedBox(height: 6),
+			_infoRow(Icons.wb_sunny_outlined,
+				'Vorhersage', m.zambretti),
+			const Divider(height: 20),
+			_infoRow(Icons.battery_std,
+				'Akku', '${m.batteryPct} %  •  ${m.batteryVolt.toStringAsFixed(2)} V'),
+			const SizedBox(height: 6),
+			_infoRow(_wifiIcon(m.wifiStrength),
+				'WLAN', _wifiLabel(m.wifiStrength)),
 		  ],
 		),
 	  ),
@@ -203,6 +266,32 @@ class _CurrentValues extends StatelessWidget {
 		  ],
 		),
 	  );
+
+  Widget _infoRow(IconData icon, String label, String value) => Row(
+		children: [
+		  Icon(icon, size: 14, color: Colors.grey),
+		  const SizedBox(width: 6),
+		  Text('$label: ', style: const TextStyle(fontSize: 13, color: Colors.grey)),
+		  Expanded(
+			child: Text(value, style: const TextStyle(fontSize: 13)),
+		  ),
+		],
+	  );
+
+  /// dBm → lesbare Qualitätsstufe
+  static String _wifiLabel(int dbm) {
+	if (dbm >= -50) return 'Ausgezeichnet';
+	if (dbm >= -60) return 'Gut';
+	if (dbm >= -70) return 'Mittel';
+	if (dbm >= -80) return 'Schwach';
+	return 'Sehr schwach';
+  }
+
+  static IconData _wifiIcon(int dbm) {
+	if (dbm >= -60) return Icons.wifi;
+	if (dbm >= -70) return Icons.wifi_2_bar;
+	return Icons.wifi_1_bar;
+  }
 }
 
 class _PeriodSelector extends StatelessWidget {
@@ -223,6 +312,35 @@ class _PeriodSelector extends StatelessWidget {
 	  ],
 	  selected: {selected},
 	  onSelectionChanged: (s) => onChanged(s.first),
+	);
+  }
+}
+
+class _ChartCard extends StatelessWidget {
+  final String title;
+  final double height;
+  final Widget child;
+
+  const _ChartCard({
+	required this.title,
+	required this.height,
+	required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+	return Card(
+	  child: Padding(
+		padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+		child: Column(
+		  crossAxisAlignment: CrossAxisAlignment.start,
+		  children: [
+			Text(title, style: Theme.of(context).textTheme.titleSmall),
+			const SizedBox(height: 8),
+			SizedBox(height: height, child: child),
+		  ],
+		),
+	  ),
 	);
   }
 }
