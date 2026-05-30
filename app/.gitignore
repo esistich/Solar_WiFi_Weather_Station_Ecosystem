@@ -13,3 +13,6 @@ android/key.properties
 
 # Umgebungsvariablen
 .env
+
+# Firebase-Konfiguration enthaelt API-Keys - nicht committen
+lib/firebase_options.dart
