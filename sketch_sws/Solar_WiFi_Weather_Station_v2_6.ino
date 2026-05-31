@@ -15,10 +15,6 @@
   Version History (recent):
 
   v2.7 (2025/2026) - API-only Edition
-  - MQTT vollst√§ndig entfernt ‚?" Station sendet ausschlie√Ylich an REST-API
-  - Blynk entfernt
-  - SHT45 entfernt (nur noch BME280 + DS18B20)
-  - Status-LED entfernt
   - AP-Konfigurations-Portal (Button D6 beim Boot gedr√ºckt halten):
     - ESP8266 √∂ffnet WLAN-Accesspoint "SWS-Config"
     - Webinterface unter 192.168.4.1 (kein Timeout, Neustart nur per Speichern)
@@ -28,23 +24,15 @@
     - history.php: GET Historien-Daten (limit, from, to)
     - status.php : Systemstatus
     - schema.sql : vollst√§ndiges Datenbankschema
-  - sendToAPI(): HTTP/HTTPS, Basic-Auth, Zambretti-Felder eingeschlossen
+  - SWSApiClient-Bibliothek fuer API-Kommunikation (HTTP/HTTPS, Basic-Auth)
   - DS18B20 Pooltemperatur auf D7 (GPIO13)
   - USB-Betrieb erkannt (volt < 0.5 V ‚?' normaler Schlaf statt Dauerschlaf)
 
   v2.6 (April 2026) - Configurable sensors & robustness pass
   - Sensors: BME280 + DS18B20
   - USE_BME280, USE_DS18B20, TEMP_SOURCE konfigurierbar
-  - Bugfixes: getTemperature(), SPIFFS-Fehlerbehandlung, Battery-ADC (16√-),
+  - Bugfixes: getTemperature(), Battery-ADC (16x), NTP-yield(), Zambretti-Hysterese, ESP.restart()
     NTP-yield(), Zambretti-Hysterese, ESP.restart() statt resetFunc
-
-  Features:
-  // 1. WiFi-Verbindung, Messung, Upload an PHP/MySQL-REST-API
-  // 2. Temperatur, Taupunkt, W√§rmeindex, Luftfeuchtigkeit, Luftdruck (abs+rel)
-  // 3. Zambretti-Wetterprognose (mehrsprachig)
-  // 4. Pooltemperatur (DS18B20)
-  // 5. Batterie-/USB-Status√ºberwachung
-  // 6. Deep-Sleep zwischen Messungen
 
   /***************************************************
    VERY IMPORTANT:
@@ -54,7 +42,6 @@
  **************************************************/
 
 #include "Settings26.h"
-// Note: Translation file is now included from Settings26.h (Translations/Translation_XX.h)
 
 // =====================================================================
 // Internal constants for sensor source selection (do not change)
@@ -93,10 +80,10 @@
 #include <ArduinoJson.h>
 #include <WiFiUdp.h>
 #include <SWSApiClient.h>           // SWS REST-API Bibliothek
-#include "FS.h"
 #include <EasyNTPClient.h>          // https://github.com/aharshac/EasyNTPClient
 #include <TimeLib.h>                // https://github.com/PaulStoffregen/Time.git
-// PubSubClient (MQTT) wurde entfernt ‚?" Station arbeitet ausschlie√Ylich mit REST-API
+
+static const int WIFI_MAX_RETRIES = 20;  // 20 x 500 ms = 10 s
 
 // =====================================================================
 // Laufzeit-Konfiguration (geladen aus EEPROM, Fallback: CFG_DEFAULT_*)
@@ -233,7 +220,6 @@ void saveConfig() {
   Serial.println("Konfiguration im EEPROM gespeichert.");
 }
 
-
 #if USE_DS18B20
   #define ONE_WIRE_BUS 13            // Data wire 18d20 Sensor is plugged into port D7 @ ESP8266
   #define DS18B20_RESOLUTION 12      // 12-bit -> 0.0625¬∞C, conversion ~750ms
@@ -249,7 +235,6 @@ Adafruit_BME280 bme;                // I2C
 WiFiUDP udp;
 EasyNTPClient ntpClient(udp, NTP_SERVER, 0);  // reading UTC
 
-//varialbes of measured or calculated sensor data
 #if USE_DS18B20
   float measured_temp_dal = -88.0f;  // -88 = Sentinel: kein Wert / Sensor-Fehler
 #endif
@@ -271,8 +256,6 @@ float DewPointSpread;               // Difference between actual temperature and
 
 //variables for trend calculation
 unsigned long current_timestamp;    // UTC-Timestamp von NTP (Sekunden seit 1.1.1970)
-unsigned long saved_timestamp;      // Timestamp stored in SPIFFS
-// Druckverlauf und Zambretti werden jetzt server-seitig in der API berechnet.
 
 // =====================================================================
 //  Europaeische Sommerzeit (CET/CEST) auf Basis von UTC-Epoch
@@ -314,9 +297,6 @@ static bool isCEST(unsigned long utcEpoch) {
 static unsigned long localTimestamp(unsigned long utcEpoch) {
     return utcEpoch + (isCEST(utcEpoch) ? 7200UL : 3600UL);
 }
-
-// Zambretti- und Druckzustands-Logik wurde in die API ausgelagert (api/v1/zambretti.php).
-
 
 
 // =====================================================================
@@ -463,8 +443,6 @@ void startConfigPortal() {
     server.handleClient();
     yield();
   }
-  // Kein Timeout: Das Portal l√§uft bis der Nutzer speichert (/save ‚?' ESP.restart())
-  // oder einen Hardware-Reset ausl√∂st.
 }
 
 void setup() {
@@ -509,9 +487,6 @@ void setup() {
   Serial.print("Language: ");
   Serial.println(LANG_NAME);
 
-  //******Battery
-  // FIX v2.6: averaged over 16 ADC reads to reduce ESP8266 ADC noise.
-
   // Voltage divider R1 = 220k+100k+220k =540k and R2=100k
   unsigned long raw_total = 0;
   for (int i = 0; i < 16; i++) {
@@ -531,8 +506,6 @@ void setup() {
   Serial.print(batterypercentage);
   Serial.println("%");
 
-  // **************Application going online**********************************************
-
   WiFi.mode(WIFI_STA);
   WiFi.hostname(cfg.station_name); // Hostname im Netzwerk anzeigen
   WiFi.begin(cfg.wifi_ssid, cfg.wifi_pass);
@@ -541,7 +514,7 @@ void setup() {
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     i++;
-    if (i > 20) {
+    if (i > WIFI_MAX_RETRIES) {
       Serial.println("Could not connect to WiFi!");
       Serial.println("Going to sleep for 10 minutes and try again.");
       if (volt > 3.4) {
@@ -555,22 +528,15 @@ void setup() {
   }
   Serial.println(" Wifi connected ok");
 
-  Serial.println("SPIFFS Initialisierung...");
-  if (!SPIFFS.begin()) {
-    Serial.println("SPIFFS nicht formatiert ‚?" wird formatiert (bis zu 30 s)...");
-    SPIFFS.format();
-    SPIFFS.begin();
   }
 
-  //******** GETTING THE TIME FROM NTP SERVER  ***********************************
-
   Serial.println("---> Now reading time from NTP Server");
-  int ii = 0;
+  int ntpRetry = 0;
   while (!ntpClient.getUnixTime()) {
     yield();                     // FIX v2.6: feed watchdog to prevent soft WDT reset
     delay(100);
-    ii++;
-    if (ii > 20) {
+    ntpRetry++;
+    if (ntpRetry > WIFI_MAX_RETRIES) {
       Serial.println("Could not connect to NTP Server!");
       Serial.println("Doing a reset now and retry a connection from scratch.");
       ESP.restart();             // FIX v2.6: cleaner than jump to address 0
@@ -597,8 +563,6 @@ void setup() {
   Serial.print(year(localTs));
   Serial.println(isCEST(current_timestamp) ? " CEST" : " CET");
 
-  //******** SENSOR INITIALISATION  ********************
-
   // ----- BME280 (always required for pressure) -----
   bool bme_status = bme.begin(0x76);  //address either 0x76 or 0x77
   if (!bme_status) {
@@ -620,9 +584,7 @@ void setup() {
   Serial.println("DS18B20 initialized at 12-bit resolution.");
 #endif
 
-measurementEvent();             // calling function to get all data from the different sensors
-
-  // Zambretti-Berechnung und Druckverlauf werden jetzt server-seitig in der API durchgef√ºhrt.
+  measurementEvent();
 
   #if USE_API
   if (cfg.api_enabled) sendToAPI();   // Messdaten zus√§tzlich an PHP/MySQL-API senden
@@ -637,10 +599,10 @@ measurementEvent();             // calling function to get all data from the dif
   else {
     goToSleep(0);   // Batterie leer: ESP.deepSleep(0) = permanenter Schlaf, Wake nur per Reset-Pin (RST‚?'GND)
   }
-} // end of void setup()
+}
 
-void loop() {               //loop is not used
-} // end of void loop()
+void loop() {
+}
 
 void measurementEvent() {
 
@@ -768,9 +730,7 @@ void measurementEvent() {
   Serial.print("Pressure State: ");
   Serial.println(pressure_in_words());
 
-} // end of void measurementEvent()
-
-// CalculateTrend() und ZambrettiLetter() wurden in die API ausgelagert (api/v1/zambretti.php).
+}
 
   // ----- Seasonal precipitation word selection with hysteresis -----
 bool isWinterMode() {
@@ -793,13 +753,6 @@ static String replaceMarker(const String& src, const char* marker, const char* r
   }
   return result;
 }
-
-// ZambrettiSays() wurde in die API ausgelagert (api/v1/zambretti.php).
-
-// ReadFromSPIFFS() / WriteToSPIFFS() / FirstTimeRun() wurden entfernt ‚?"
-// Druckverlauf wird jetzt server-seitig in der DB gespeichert.
-
-
 
 #if USE_DS18B20
 float getTemperature() {
@@ -826,12 +779,6 @@ float getTemperature() {
 }
 #endif
 
-
-
-// =====================================================================
-// Base64-Enkodierung (minimal, f√ºr HTTP Basic Auth)
-// Keine externe Bibliothek n√∂tig ‚?" der ESP8266 Arduino Core enth√§lt
-// keine stdlib-Base64, daher diese schlanke Inline-Implementierung.
 #if USE_API
 // sendToAPI() - sendet Messdaten per HTTP(S) POST via SWSApiClient.
 void sendToAPI() {
@@ -873,4 +820,4 @@ void goToSleep(unsigned int sleepmin) {
   Serial.println(" Minute(s).");
 
   ESP.deepSleep(sleepmin * 60UL * 1000000UL);
-} // end of goToSleep()
+}
