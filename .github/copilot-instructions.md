@@ -2,14 +2,15 @@
 
 ## Projektrichtlinien
 - Wenn neue Arduino-Bibliotheken im Sketch verwendet werden, diese direkt per PowerShell von GitHub herunterladen und nach C:\Users\EsIst\Documents\Arduino\libraries\ installieren – nicht nur erwähnen.
+- Bei jeder Aktualisierung der SWSApiClient-Bibliothek (library/SWSApiClient/) soll der Agent die Bibliothek automatisch in den Arduino-Libraries-Ordner kopieren (C:/Users/EsIst/Documents/Arduino/libraries/SWSApiClient/).
 - Nach jeder Änderung an Dateien im api/-Ordner automatisch den upload/-Ordner aktualisieren mit: `robocopy api upload /E /XF "db.php" "auth.php" "*adminsdk*.json" /XD "upload" "homeassistant"` – homeassistant/ gehört nicht auf den Server.
 
 ---
 
 ## API-Referenz – Solar WiFi Weather Station
 
-**Basis-URL (Produktion):** `https://timm-sander.net/sws/api`
-**Router-Datei:** `api/v1/index.php` – alle `/v1/*`-Anfragen laufen hier durch.
+**Basis-URL (Produktion):** `https://timm-sander.net/sws/api`  
+**Router-Datei:** `api/v1/index.php` – alle `/v1/*`-Anfragen laufen hier durch.  
 **Fallback ohne mod_rewrite:** `?r=<route>` z. B. `GET /sws/api/v1/index.php?r=data`
 
 ---
@@ -39,8 +40,6 @@
 ---
 
 ### GET /v1/data – Antwortformat
-
-```json
 {
   "station":          "sws-garten",
   "temperature":      21.5,
@@ -57,8 +56,6 @@
   "created_at":       "2025-07-01 14:23:00",
   "data_age_s":       45
 }
-```
-
 - `created_at` ist **Europe/Berlin** (CEST/CET) – Display und App müssen **keine** eigene Zeitzonenumrechnung machen.
 - `data_age_s` = Sekunden seit letzter Messung, immer aktuell gegen UTC berechnet.
 - Fehlende Sensoren fehlen im JSON komplett (kein `null`-Wert).
@@ -68,10 +65,8 @@
 
 ### POST /v1/data – Messdaten hochladen (Station)
 
-**Auth:** HTTP Basic Auth (Username/Passwort aus `api/config/auth.php`)
+**Auth:** HTTP Basic Auth (Username/Passwort aus `api/config/auth.php`)  
 **Content-Type:** `application/json`
-
-```json
 {
   "station_slug":   "sws-garten",
   "temperature":    21.5,
@@ -86,8 +81,6 @@
   "wifi_strength":  -67,
   "device_ts":      "2025-07-01T12:23:00Z"
 }
-```
-
 - `station_slug` optional – default: erste Station in der DB.
 - `device_ts` optionaler UTC-Timestamp des Geräts.
 - Felder `station_slug`, `station_name`, `device_ts` werden intern verwendet, nicht als Messwert gespeichert.

@@ -42,24 +42,15 @@ const String Version = "2.7";
 // #include "Translations/Translation_EN.h"
 
 /******* Sensor Configuration ************************************************
- * Choose which sensors are physically connected. The BME280 is required as
- * the project relies on its pressure sensor for the Zambretti forecast.
- * Additional sensors are optional and can be enabled or disabled here.
+ * BME280 ist immer aktiv und liefert Temperatur, Luftfeuchtigkeit und Druck.
+ * Der DS18B20 ist ein optionaler Zusatzfuehler (z.B. Pool, Boden, Zisterne)
+ * und wird immer als "pool_temperature" an die API gesendet.
+ *
+ * USE_DS18B20 = 1  ->  DS18B20 angeschlossen (D7 / GPIO13, 4.7k Pull-up)
+ * USE_DS18B20 = 0  ->  kein Zusatzfuehler vorhanden
  ****************************************************************************/
 
-// ---- Step 1: Which sensors are physically connected? ----
-// Set to 1 if the sensor is wired up, 0 if not.
-// BME280 is always required (it provides the pressure data for Zambretti).
-
-#define USE_BME280     1     // Bosch BME280: pressure (REQUIRED), humidity, temperature
-#define USE_DS18B20    1     // Dallas 18B20:  temperature only (one-wire on D7)
-
-// ---- Step 2: Which sensor should be used for the actual readings? ----
-// Pick one:  SRC_BME = BME280,  SRC_DAL = DS18B20
-// (If you pick a sensor that is disabled above, the code falls back to BME280.)
-
-#define TEMP_SOURCE    SRC_DAL    // DS18B20 (bessere thermische Entkopplung im Freien)
-#define HUMI_SOURCE    SRC_BME    // BME280 (einzige verbleibende Feuchtigkeitsquelle)
+#define USE_DS18B20    1     // Dallas DS18B20 Zusatzfuehler (One-Wire, D7)
 
 /****** WiFi Settings (Compile-Zeit-Fallbacks) *****************************/
 
