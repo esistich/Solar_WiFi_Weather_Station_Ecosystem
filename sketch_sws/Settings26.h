@@ -89,7 +89,7 @@ const String Version = "2.7";
  * Muss bei jedem neuen Sketch angepasst werden (z.B. "sws_display").
  ****************************************************************************/
 
-#define USE_OTA               0          // 0 = deaktiviert, 1 = aktiv
+#define USE_OTA               1          // 0 = deaktiviert, 1 = aktiv
 #define CFG_OTA_BASE_PATH     "/sws/ota" // Basispfad auf dem API-Host
 #define CFG_OTA_SKETCH_ID     "sws"      // Sketch-Bezeichner (Unterordner)
 #define CFG_OTA_TIMEOUT_MS    5000       // Max. Wartezeit fuer Version-Check

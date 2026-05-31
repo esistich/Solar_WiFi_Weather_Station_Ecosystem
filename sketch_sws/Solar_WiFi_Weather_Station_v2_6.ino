@@ -75,8 +75,7 @@
 #include <ArduinoJson.h>
 #include <WiFiUdp.h>
 #include <SWSApiClient.h>           // SWS REST-API Bibliothek
-#include "FS.h"
-#include <EasyNTPClient.h>          // https://github.com/aharshac/EasyNTPClient
+#include <EasyNTPClient.h>
 #include <TimeLib.h>                // https://github.com/PaulStoffregen/Time.git
 
 // =====================================================================
@@ -265,7 +264,6 @@ static const char* pressure_in_words() {
 
 //variables for trend calculation
 unsigned long current_timestamp;    // UTC-Timestamp von NTP (Sekunden seit 1.1.1970)
-unsigned long saved_timestamp;      // Timestamp stored in SPIFFS
 // Druckverlauf und Zambretti werden jetzt server-seitig in der API berechnet.
 
 // =====================================================================
@@ -543,14 +541,7 @@ void setup() {
   checkForOTA();   // Firmware-Update pruefen (vor NTP und Messung)
   #endif
 
-  Serial.println("SPIFFS Initialisierung...");
-  if (!SPIFFS.begin()) {
-    Serial.println("SPIFFS nicht formatiert - wird formatiert (bis zu 30 s)...");
-    SPIFFS.format();
-    SPIFFS.begin();
-  }
-
-  //******** GETTING THE TIME FROM NTP SERVER  ***********************************
+  //******** GETTING THE TIME FROM NTP SERVER
 
   Serial.println("---> Now reading time from NTP Server");
   int ii = 0;
