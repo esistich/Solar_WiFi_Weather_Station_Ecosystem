@@ -25,11 +25,18 @@ class Device {
   String get apiUrl =>
 	  '${apiHttps ? 'https' : 'http'}://$apiHost$apiPath';
 
+  /// Basis-URL des Servers ohne Pfad, z.B. "https://timm-sander.net"
+  String get baseUrl => '${apiHttps ? 'https' : 'http'}://$apiHost';
+
+  /// History-Endpunkt: immer /sws/api/v1/history (unabhaengig von apiPath)
   String get historyUrl {
 	final base = '${apiHttps ? 'https' : 'http'}://$apiHost';
-	// Leitet history.php aus data.php-Pfad ab
-	final histPath = apiPath.replaceFirst('data.php', 'history.php');
-	return '$base$histPath';
+	// apiPath kann /sws/api/v1/data oder Legacy /sws/api/data.php sein –
+	// history liegt immer unter /v1/history relativ zum API-Root
+	final apiRoot = apiPath.contains('/v1/')
+		? apiPath.substring(0, apiPath.indexOf('/v1/'))
+		: apiPath.replaceFirst(RegExp(r'/[^/]+\.php$'), '');
+	return '$base$apiRoot/v1/history';
   }
 
   Device copyWith({

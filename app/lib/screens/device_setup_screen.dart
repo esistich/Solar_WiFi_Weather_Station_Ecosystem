@@ -24,7 +24,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   // Formular-Felder
   final _nameCtrl     = TextEditingController(text: 'Meine Station');
   final _apiHostCtrl  = TextEditingController();
-  final _apiPathCtrl  = TextEditingController(text: '/api/data.php');
+  final _apiPathCtrl  = TextEditingController(text: '/sws/api/v1/data');
   final _apiUserCtrl  = TextEditingController();
   final _apiPassCtrl  = TextEditingController();
   bool _apiHttps      = true;
@@ -331,7 +331,7 @@ class _SoftApSetup extends StatelessWidget {
 		  _label('API-Pfad'),
 		  TextField(
 			controller: apiPathCtrl,
-			decoration: const InputDecoration(hintText: '/api/data.php'),
+			decoration: const InputDecoration(hintText: '/sws/api/v1/data'),
 		  ),
 		  const SizedBox(height: 12),
 		  SwitchListTile(
@@ -414,10 +414,10 @@ class _ManualSetup extends StatelessWidget {
 		  _label('API-Pfad'),
 		  TextField(
 			controller: apiPathCtrl,
-			decoration: const InputDecoration(hintText: '/api/data.php'),
+			decoration: const InputDecoration(hintText: '/sws/api/v1/data'),
 		  ),
 		  const SizedBox(height: 12),
-		  _label('API-Benutzername (optional)'),
+		  _label('API-Benutzername (optional)')
 		  TextField(
 			controller: apiUserCtrl,
 			decoration: const InputDecoration(hintText: 'Leer lassen wenn keine Auth'),
