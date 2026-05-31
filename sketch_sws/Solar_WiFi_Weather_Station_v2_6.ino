@@ -649,6 +649,9 @@ void measurementEvent() {
   } else {
     // Sensor nicht verfuegbar oder Fehler - pool_temp bleibt auf Sentinel-Wert -88
     Serial.println("DS18B20: Ungueltiger Wert - pool_temp nicht aktualisiert.");
+    #if USE_API
+    logToAPI("warning", "DS18B20_INVALID", "DS18B20 lieferte keinen gueltigen Wert - pool_temp nicht aktualisiert");
+    #endif
   }
 #endif
 
@@ -662,6 +665,9 @@ void measurementEvent() {
   } else {
     measured_temp = measured_temp_bme;
     Serial.println("WARNUNG: DS18B20 fehlgeschlagen - verwende BME280 als Temperatur-Fallback.");
+    #if USE_API
+    logToAPI("warning", "DS18B20_FAIL_FALLBACK", "DS18B20 fehlgeschlagen - Aussentemperatur aus BME280");
+    #endif
   }
 #endif
 
@@ -864,6 +870,9 @@ void sendToAPI() {
   size_t written = serializeJson(jsonDoc, payload, sizeof(payload));
   if (written == 0 || written >= sizeof(payload) - 1) {
     Serial.println("WARNUNG: JSON-Payload abgeschnitten! Buffer erhoehen.");
+    #if USE_API
+    logToAPI("error", "BUFFER_OVERFLOW", "JSON-Payload wurde abgeschnitten - Buffer zu klein");
+    #endif
   }
   Serial.print("API Payload (");
   Serial.print(written);
@@ -906,6 +915,11 @@ void sendToAPI() {
   } else {
     Serial.print("API Fehler: ");
     Serial.println(http.errorToString(httpCode));
+    #if USE_API
+    char ctx[48];
+    snprintf(ctx, sizeof(ctx), "{\"http_code\":%d}", httpCode);
+    logToAPI("error", "API_HTTP_ERROR", http.errorToString(httpCode).c_str(), ctx);
+    #endif
   }
 
   http.end();

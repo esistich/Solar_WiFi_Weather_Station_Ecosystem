@@ -179,3 +179,24 @@ ALTER TABLE `measurements`
   MODIFY COLUMN `trend_value`     DOUBLE       NULL,
   MODIFY COLUMN `dewpoint_spread` DECIMAL(5,2) NULL;
 
+-- ----------------------------------------------------------
+-- Migration v2.1 – station_errors (Fehler-Log der Stationen)
+-- ----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `station_errors` (
+  `id`         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `station_id` INT UNSIGNED    NOT NULL,
+  `level`      ENUM('error','warning','info') NOT NULL DEFAULT 'error'
+                 COMMENT 'Schweregrad: error = kritisch, warning = Warnung, info = Information',
+  `code`       VARCHAR(32)     NOT NULL
+                 COMMENT 'Maschinenlesbarer Kurzcode, z.B. DS18B20_FAIL, BUFFER_OVERFLOW, HTTP_ERROR',
+  `message`    VARCHAR(255)    NOT NULL
+                 COMMENT 'Menschenlesbare Fehlerbeschreibung',
+  `context`    JSON            NULL
+                 COMMENT 'Optionale Zusatzdaten als JSON (z.B. HTTP-Code, Sensorwert)',
+  `created_at` TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_station_created` (`station_id`, `created_at`),
+  CONSTRAINT `fk_errors_station`
+    FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
