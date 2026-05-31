@@ -69,6 +69,24 @@ const String Version = "2.7";
 #define CFG_DEFAULT_API_USER      "NAy1b4GpuS3dEvej"
 #define CFG_DEFAULT_API_PASS      "REDACTED_API_PASS"
 
+/****** OTA-Update (Over-the-Air Firmware) *********************************
+ * Beim Boot wird einmalig geprueft ob eine neue Firmware verfuegbar ist.
+ * Die Versionsdatei und Firmware liegen auf demselben Host wie die API:
+ *   GET {api_host}/sws/ota/sws/version.txt  -> z.B. "2.7.1"
+ *   GET {api_host}/sws/ota/sws/firmware.bin
+ *
+ * USE_OTA = 0  ->  OTA deaktiviert (Standard bis Hardware-Test bestanden)
+ * USE_OTA = 1  ->  OTA-Check beim jedem Boot aktiv
+ *
+ * CFG_OTA_SKETCH_ID: eindeutiger Bezeichner dieses Sketches im OTA-Pfad.
+ * Muss bei jedem neuen Sketch angepasst werden (z.B. "sws_display").
+ ****************************************************************************/
+
+#define USE_OTA               0          // 0 = deaktiviert, 1 = aktiv
+#define CFG_OTA_BASE_PATH     "/sws/ota" // Basispfad auf dem API-Host
+#define CFG_OTA_SKETCH_ID     "sws"      // Sketch-Bezeichner (Unterordner)
+#define CFG_OTA_TIMEOUT_MS    5000       // Max. Wartezeit fuer Version-Check
+
 /****** Additional Settings (Compile-Zeit-Fallbacks) ************************/
 
 // Kalibrierungsfaktor für den Spannungsteiler am ADC (R1=540kΩ, R2=100kΩ).

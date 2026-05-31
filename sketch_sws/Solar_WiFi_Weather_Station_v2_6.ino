@@ -521,6 +521,10 @@ void setup() {
   }
   Serial.println(" Wifi connected ok");
 
+  #if USE_OTA
+  checkForOTA();   // Firmware-Update pruefen (vor NTP und Messung)
+  #endif
+
   Serial.println("SPIFFS Initialisierung...");
   if (!SPIFFS.begin()) {
     Serial.println("SPIFFS nicht formatiert â?" wird formatiert (bis zu 30 s)...");
@@ -740,6 +744,102 @@ static String replaceMarker(const String& src, const char* marker, const char* r
   }
   return result;
 }
+
+#if USE_OTA
+#include <ESP8266httpUpdate.h>
+
+// Prueft beim Boot ob eine neue Firmware auf dem Server liegt.
+// Liegt eine hoehere Version vor, wird die Firmware geflasht und der ESP neugestartet.
+// Bei Fehler oder nicht erreichbarem Server: Warnung ins Log, normaler Weiterstart.
+static void checkForOTA() {
+  String otaBase = String(cfg.api_https ? "https" : "http") +
+                   "://" + cfg.api_host +
+                   CFG_OTA_BASE_PATH "/" CFG_OTA_SKETCH_ID;
+  String versionUrl = otaBase + "/version.txt";
+  String firmwareUrl = otaBase + "/firmware.bin";
+
+  Serial.print("OTA: Versionscheck -> ");
+  Serial.println(versionUrl);
+
+  std::unique_ptr<WiFiClient> client;
+  if (cfg.api_https) {
+    WiFiClientSecure* sc = new WiFiClientSecure();
+    sc->setInsecure();   // Zertifikat nicht pruefen (kein CA-Bundle auf ESP8266)
+    client.reset(sc);
+  } else {
+    client.reset(new WiFiClient());
+  }
+
+  HTTPClient http;
+  http.setTimeout(CFG_OTA_TIMEOUT_MS);
+  http.begin(*client, versionUrl);
+
+  // Basic-Auth wie API
+  if (strlen(cfg.api_user) > 0) {
+    http.setAuthorization(cfg.api_user, cfg.api_pass);
+  }
+
+  int code = http.GET();
+  if (code != HTTP_CODE_OK) {
+    Serial.printf("OTA: Versionscheck fehlgeschlagen (HTTP %d) - uebersprungen.\n", code);
+    http.end();
+    #if USE_API
+    char ctx[48];
+    snprintf(ctx, sizeof(ctx), "{\"http_code\":%d}", code);
+    logToAPI("warning", "OTA_VERSION_CHECK_FAILED", "OTA-Versionscheck fehlgeschlagen", ctx);
+    #endif
+    return;
+  }
+
+  String remoteVersion = http.getString();
+  http.end();
+  remoteVersion.trim();
+
+  Serial.printf("OTA: lokal=%s  server=%s\n", Version.c_str(), remoteVersion.c_str());
+
+  if (remoteVersion == Version) {
+    Serial.println("OTA: Firmware aktuell - kein Update noetig.");
+    return;
+  }
+
+  Serial.printf("OTA: Neues Update gefunden (%s) - starte Flash...\n", remoteVersion.c_str());
+  #if USE_API
+  {
+    char msg[64];
+    snprintf(msg, sizeof(msg), "OTA-Update: %s -> %s", Version.c_str(), remoteVersion.c_str());
+    logToAPI("info", "OTA_UPDATE_START", msg);
+  }
+  #endif
+
+  ESPhttpUpdate.setLedPin(LED_BUILTIN, LOW);
+  ESPhttpUpdate.rebootOnUpdate(true);
+
+  if (cfg.api_https) {
+    WiFiClientSecure sc;
+    sc.setInsecure();
+    t_httpUpdate_return ret = ESPhttpUpdate.update(sc, firmwareUrl);
+    if (ret != HTTP_UPDATE_OK) {
+      Serial.printf("OTA: Flash fehlgeschlagen (%d): %s\n",
+                    ESPhttpUpdate.getLastError(),
+                    ESPhttpUpdate.getLastErrorString().c_str());
+      #if USE_API
+      logToAPI("error", "OTA_FLASH_FAILED", ESPhttpUpdate.getLastErrorString().c_str());
+      #endif
+    }
+  } else {
+    WiFiClient wc;
+    t_httpUpdate_return ret = ESPhttpUpdate.update(wc, firmwareUrl);
+    if (ret != HTTP_UPDATE_OK) {
+      Serial.printf("OTA: Flash fehlgeschlagen (%d): %s\n",
+                    ESPhttpUpdate.getLastError(),
+                    ESPhttpUpdate.getLastErrorString().c_str());
+      #if USE_API
+      logToAPI("error", "OTA_FLASH_FAILED", ESPhttpUpdate.getLastErrorString().c_str());
+      #endif
+    }
+  }
+}
+#endif  // USE_OTA
 
 // ZambrettiSays() wurde in die API ausgelagert (api/v1/zambretti.php).
 

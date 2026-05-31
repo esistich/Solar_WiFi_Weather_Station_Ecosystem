@@ -44,6 +44,10 @@
 
 #include "DisplaySettings.h"
 
+#if USE_OTA
+#include <ESP8266httpUpdate.h>
+#endif
+
 // ------ EEPROM-Layout ----------------------------------------
 static const uint8_t EEPROM_MAGIC[4]  = { 0x53, 0x57, 0x44, 0x31 };  // "SWD1"
 static const int     EEPROM_SIZE      = 1024;
@@ -477,6 +481,81 @@ static void updateProgressBar(unsigned long elapsedMs, unsigned long totalMs) {
 }
 
 // =============================================================
+//  OTA-Update
+// =============================================================
+
+#if USE_OTA
+// Prueft beim Boot ob eine neue Firmware auf dem Server liegt.
+// Liegt eine hoehere Version vor, wird geflasht und neugestartet.
+// Bei Fehler: Serial-Ausgabe, dann normaler Weiterstart.
+static void checkForOTA(const DisplayConfig& c) {
+  String otaBase = String(c.api_https ? "https" : "http") +
+                   "://" + c.api_host +
+                   CFG_OTA_BASE_PATH "/" CFG_OTA_SKETCH_ID;
+  String versionUrl = otaBase + "/version.txt";
+  String firmwareUrl = otaBase + "/firmware.bin";
+
+  Serial.print("OTA: Versionscheck -> ");
+  Serial.println(versionUrl);
+
+  std::unique_ptr<WiFiClient> wc;
+  if (c.api_https) {
+    WiFiClientSecure* sc = new WiFiClientSecure();
+    sc->setInsecure();
+    wc.reset(sc);
+  } else {
+    wc.reset(new WiFiClient());
+  }
+
+  HTTPClient http;
+  http.setTimeout(CFG_OTA_TIMEOUT_MS);
+  http.begin(*wc, versionUrl);
+  int code = http.GET();
+
+  if (code != HTTP_CODE_OK) {
+    Serial.printf("OTA: Versionscheck fehlgeschlagen (HTTP %d) - uebersprungen.\n", code);
+    http.end();
+    return;
+  }
+
+  String remoteVer = http.getString();
+  http.end();
+  remoteVer.trim();
+
+  // Lokale Version aus Sketch-Kommentar-Define
+  const String localVer = F("2.0");
+  Serial.printf("OTA: lokal=%s  server=%s\n", localVer.c_str(), remoteVer.c_str());
+
+  if (remoteVer == localVer) {
+    Serial.println("OTA: Firmware aktuell - kein Update noetig.");
+    return;
+  }
+
+  Serial.printf("OTA: Neues Update (%s) - starte Flash...\n", remoteVer.c_str());
+  ESPhttpUpdate.setLedPin(LED_BUILTIN, LOW);
+  ESPhttpUpdate.rebootOnUpdate(true);
+
+  if (c.api_https) {
+    WiFiClientSecure sc; sc.setInsecure();
+    t_httpUpdate_return ret = ESPhttpUpdate.update(sc, firmwareUrl);
+    if (ret != HTTP_UPDATE_OK) {
+      Serial.printf("OTA: Flash fehlgeschlagen (%d): %s\n",
+                    ESPhttpUpdate.getLastError(),
+                    ESPhttpUpdate.getLastErrorString().c_str());
+    }
+  } else {
+    WiFiClient wc2;
+    t_httpUpdate_return ret = ESPhttpUpdate.update(wc2, firmwareUrl);
+    if (ret != HTTP_UPDATE_OK) {
+      Serial.printf("OTA: Flash fehlgeschlagen (%d): %s\n",
+                    ESPhttpUpdate.getLastError(),
+                    ESPhttpUpdate.getLastErrorString().c_str());
+    }
+  }
+}
+#endif  // USE_OTA
+
+// =============================================================
 //  setup()
 // =============================================================
 void setup() {
@@ -535,6 +614,10 @@ void setup() {
         }
     }
     Serial.printf("WiFi OK – IP: %s\n", WiFi.localIP().toString().c_str());
+
+    #if USE_OTA
+    checkForOTA(cfg);   // Firmware-Update pruefen (einmalig beim Boot)
+    #endif
 
     // NTP starten
     ntpClient.setPoolServerName(CFG_DEFAULT_NTP_SERVER);

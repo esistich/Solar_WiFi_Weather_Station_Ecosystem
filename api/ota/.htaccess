@@ -1,0 +1,8 @@
+RewriteEngine On
+
+# /sws/ota/{sketch}/version.txt  -> index.php?sketch={sketch}&file=version.txt
+# /sws/ota/{sketch}/firmware.bin -> index.php?sketch={sketch}&file=firmware.bin
+RewriteRule ^([a-z0-9_-]+)/(version\.txt|firmware\.bin)$ index.php?sketch=$1&file=$2 [L,QSA]
+
+# Direktzugriff auf firmware-Ordner sperren
+RewriteRule ^firmware/ - [F,L]
