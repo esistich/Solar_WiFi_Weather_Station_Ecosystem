@@ -5,7 +5,7 @@
   Authors: Keith Hungerford, Debasish Dutta and Marc Stähli
   Website : www.opengreenenergy.com */
 
-const String Version = "2.7";
+const String Version = "2.7.2";
 
 // =====================================================================
 // Compile-Zeit-Fallbacks für alle Laufzeit-Einstellungen
@@ -79,8 +79,8 @@ const String Version = "2.7";
 /****** OTA-Update (Over-the-Air Firmware) *********************************
  * Beim Boot wird einmalig geprueft ob eine neue Firmware verfuegbar ist.
  * Die Versionsdatei und Firmware liegen auf demselben Host wie die API:
- *   GET {api_host}/sws/ota/sws/version.txt  -> z.B. "2.7.1"
- *   GET {api_host}/sws/ota/sws/firmware.bin
+ *   GET {api_host}/sws/api/ota/sws/version.txt  -> z.B. "2.7.1"
+ *   GET {api_host}/sws/api/ota/sws/firmware.bin
  *
  * USE_OTA = 0  ->  OTA deaktiviert (Standard bis Hardware-Test bestanden)
  * USE_OTA = 1  ->  OTA-Check beim jedem Boot aktiv
@@ -90,7 +90,7 @@ const String Version = "2.7";
  ****************************************************************************/
 
 #define USE_OTA               1          // 0 = deaktiviert, 1 = aktiv
-#define CFG_OTA_BASE_PATH     "/sws/ota" // Basispfad auf dem API-Host
+#define CFG_OTA_BASE_PATH     "/sws/api/ota/firmware" // Basispfad auf dem API-Host
 #define CFG_OTA_SKETCH_ID     "sws"      // Sketch-Bezeichner (Unterordner)
 #define CFG_OTA_TIMEOUT_MS    5000       // Max. Wartezeit fuer Version-Check
 

@@ -417,7 +417,7 @@ class _ManualSetup extends StatelessWidget {
 			decoration: const InputDecoration(hintText: '/sws/api/v1/data'),
 		  ),
 		  const SizedBox(height: 12),
-		  _label('API-Benutzername (optional)')
+		  _label('API-Benutzername (optional)'),
 		  TextField(
 			controller: apiUserCtrl,
 			decoration: const InputDecoration(hintText: 'Leer lassen wenn keine Auth'),

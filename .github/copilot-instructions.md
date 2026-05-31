@@ -4,6 +4,7 @@
 - Wenn neue Arduino-Bibliotheken im Sketch verwendet werden, diese direkt per PowerShell von GitHub herunterladen und nach C:\Users\EsIst\Documents\Arduino\libraries\ installieren – nicht nur erwähnen.
 - Bei jeder Aktualisierung der SWSApiClient-Bibliothek (library/SWSApiClient/) soll der Agent die Bibliothek automatisch in den Arduino-Libraries-Ordner kopieren (C:/Users/EsIst/Documents/Arduino/libraries/SWSApiClient/).
 - Nach jeder Änderung an Dateien im api/-Ordner automatisch den upload/-Ordner aktualisieren mit: `robocopy api upload /E /XF "db.php" "auth.php" "*adminsdk*.json" /XD "upload" "homeassistant"` – homeassistant/ gehört nicht auf den Server.
+- Nach jeder Änderung immer das passende Script ausführen: (1) api/ → `tools/build_upload.ps1` → upload/, (2) sketch_sws/ + sketch_sws_display/ + library/SWSApiClient/ → `tools/sync_arduino.ps1` → Arduino-Sketchbook, (3) app/ (Flutter) → `flutter build apk --release` → APK. Das zentrale Script `tools/build_all.ps1` führt alle drei Schritte durch. Einzelne Teile können mit -Skip api, -Skip arduino oder -Skip app übersprungen werden.
 
 ---
 

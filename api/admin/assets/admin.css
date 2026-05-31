@@ -93,6 +93,22 @@ tr:hover td { background: var(--surface); }
 .msg-err { color: var(--danger);  background: rgba(225,87,89,.12);  border: 1px solid var(--danger);
            border-radius: 6px; padding: .6rem .9rem; font-size: .88rem; margin-bottom: .8rem; }
 
+/* ---- OTA ---- */
+.ota-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+.ota-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.2rem 1.4rem; display: flex; flex-direction: column; gap: .5rem; }
+.ota-card-title { font-size: 1rem; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: .4rem; }
+.ota-card-version { font-size: 1.6rem; font-weight: 700; color: var(--accent); line-height: 1; }
+.ota-card-meta { font-size: .78rem; color: var(--muted); line-height: 1.6; }
+.ota-card-meta code { background: var(--bg); border: 1px solid var(--border); padding: .1rem .35rem; border-radius: 4px; font-size: .76rem; word-break: break-all; }
+.ota-card-no-fw { font-size: .82rem; color: var(--danger); }
+.ota-upload-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.4rem 1.6rem; max-width: 560px; }
+.ota-upload-panel h3 { font-size: 1rem; font-weight: 700; margin-bottom: 1rem; }
+.ota-form { display: flex; flex-direction: column; gap: .8rem; }
+.ota-form label { display: flex; flex-direction: column; gap: .3rem; font-size: .85rem; color: var(--muted); }
+.ota-form select, .ota-form input[type=text] { padding: .55rem .8rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: .95rem; }
+.ota-form select:focus, .ota-form input:focus { outline: none; border-color: var(--accent); }
+.ota-form input[type=file] { color: var(--muted); font-size: .88rem; }
+
 /* ---- Fehler-Log ---- */
 .errorlog-filter { display: flex; gap: .75rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
 .errorlog-filter select { padding: .45rem .7rem; background: var(--bg); border: 1px solid var(--border);

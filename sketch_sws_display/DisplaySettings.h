@@ -59,6 +59,6 @@
 // USE_OTA = 1  ->  OTA-Check beim Boot aktiv
 // CFG_OTA_SKETCH_ID: muss bei jedem neuen Sketch angepasst werden.
 #define USE_OTA               0          // 0 = deaktiviert, 1 = aktiv
-#define CFG_OTA_BASE_PATH     "/sws/ota" // Basispfad auf dem API-Host
+#define CFG_OTA_BASE_PATH     "/sws/api/ota/firmware" // Basispfad auf dem API-Host
 #define CFG_OTA_SKETCH_ID     "sws_display"
 #define CFG_OTA_TIMEOUT_MS    5000

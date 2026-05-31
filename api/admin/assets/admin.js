@@ -175,6 +175,7 @@ const loaders = {
   live:        () => { loadStations().then(loadLive); clearInterval(liveTimer); liveTimer = setInterval(loadLive, 30_000); },
   credentials: () => {},   // kein Vorladen nötig
   errorlog:    loadErrorLog,
+  ota:         loadOta,
 };
 
 // ---- Credentials-Formular ----
@@ -254,6 +255,82 @@ async function populateErrStations() {
     o.textContent = s.name;
     sel.appendChild(o);
   });
+}
+
+// ---- OTA-Verwaltung ----
+async function loadOta() {
+  const sketches = await api('ota');
+  const sel      = document.getElementById('ota-sketch-select');
+  const cards    = document.getElementById('ota-cards');
+
+  if (!Array.isArray(sketches) || !sketches.length) {
+    cards.innerHTML = '<p style="color:var(--muted)">Keine Firmware-Ordner gefunden.<br>Ordner unter <code>api/ota/firmware/{sketch-id}/</code> anlegen.</p>';
+    sel.innerHTML   = '<option value="">Keine Sketches gefunden</option>';
+    return;
+  }
+
+  // Karten rendern
+  cards.innerHTML = `<div class="ota-grid">${sketches.map(s => {
+    const mtime = s.firmware_mtime
+      ? new Date(s.firmware_mtime * 1000).toLocaleString('de-DE')
+      : null;
+    const size  = s.firmware_size ? (s.firmware_size / 1024).toFixed(1) + '\u202fKB' : null;
+    const hasFw = size !== null;
+    return `
+    <div class="ota-card">
+      <div class="ota-card-title">&#x1F4DF; ${s.sketch}</div>
+      <div class="ota-card-version">${s.version ?? '–'}</div>
+      <div class="ota-card-meta">
+        ${hasFw
+          ? `${size} &nbsp;·&nbsp; ${mtime}<br>Pfad: <code>${s.sketch_path}firmware.bin</code>`
+          : '<span class="ota-card-no-fw">&#x26A0;&#xFE0F; Noch keine Firmware hochgeladen</span>'}
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+
+  // Dropdown befüllen
+  sel.innerHTML = sketches.map(s =>
+    `<option value="${s.sketch}">${s.sketch}</option>`
+  ).join('');
+}
+
+async function otaUpload(e) {
+  e.preventDefault();
+  const form = e.target;
+  const msg  = document.getElementById('ota-upload-msg');
+  const btn  = document.getElementById('ota-submit-btn');
+
+  const sketch  = form.elements.sketch.value;
+  const version = form.elements.version.value.trim();
+  const file    = form.elements.firmware.files[0];
+
+  btn.disabled  = true;
+  msg.textContent = 'Wird hochgeladen…';
+
+  // 1. Firmware hochladen
+  const fd = new FormData();
+  fd.append('sketch',   sketch);
+  fd.append('firmware', file);
+  const uploadRes = await fetch('?action=api/ota/upload', { method: 'POST', body: fd }).then(r => r.json());
+  if (!uploadRes.ok) {
+    msg.textContent = `❌ Upload fehlgeschlagen: ${uploadRes.error}`;
+    btn.disabled = false;
+    return;
+  }
+
+  // 2. Version setzen
+  const verRes = await api('ota/version', 'POST', { sketch, version });
+  if (!verRes.ok) {
+    msg.textContent = `⚠️ Firmware hochgeladen, Version konnte nicht gesetzt werden: ${verRes.error}`;
+    btn.disabled = false;
+    loadOta();
+    return;
+  }
+
+  msg.textContent = `✅ ${sketch} v${verRes.version} bereitgestellt (${(uploadRes.size / 1024).toFixed(1)} KB).`;
+  btn.disabled = false;
+  form.elements.firmware.value = '';
+  loadOta();
 }
 
 // Start

@@ -27,6 +27,11 @@ $targets = @(
 		Exc = @("*.md")
 	},
 	@{
+		Src = Join-Path $repo "sketch_sws_display"
+		Dst = Join-Path $arduino "sws\sws_display\sketch_sws_display"
+		Exc = @("*.md")
+	},
+	@{
 		Src = Join-Path $repo "library\SWSApiClient"
 		Dst = Join-Path $arduino "libraries\SWSApiClient"
 		Exc = @()

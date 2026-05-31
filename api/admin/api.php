@@ -242,4 +242,51 @@ match (true) {
 	})(),
 
 	default => adminJson(404, ['error' => 'Unbekannte Admin-Aktion']),
+
+	// GET api/ota  – alle Sketch-Ordner mit Version und Firmware-Info
+	$sub === 'ota' && $method === 'GET' => (function () {
+		$base = dirname(__DIR__) . '/ota/firmware';
+		$list = [];
+		if (is_dir($base)) {
+			foreach (scandir($base) as $entry) {
+				if ($entry[0] === '.') continue;
+				$dir = $base . '/' . $entry;
+				if (!is_dir($dir)) continue;
+				$vf = $dir . '/version.txt';
+				$bf = $dir . '/firmware.bin';
+				$list[] = [
+					'sketch'         => $entry,
+					'sketch_path'    => 'ota/firmware/' . $entry . '/',
+					'version'        => file_exists($vf) ? trim(file_get_contents($vf)) : null,
+					'firmware_size'  => file_exists($bf) ? filesize($bf) : null,
+					'firmware_mtime' => file_exists($bf) ? filemtime($bf) : null,
+				];
+			}
+		}
+		adminJson(200, $list);
+	})(),
+
+	// POST api/ota/version  { sketch, version }
+	$sub === 'ota/version' && $method === 'POST' => (function () {
+		$d      = bodyJson();
+		$sketch = preg_replace('/[^a-z0-9_\-]/', '', strtolower($d['sketch'] ?? ''));
+		$ver    = trim($d['version'] ?? '');
+		$dir    = dirname(__DIR__) . '/ota/firmware/' . $sketch;
+		if ($sketch === '' || !is_dir($dir)) adminJson(422, ['error' => 'Unbekannter Sketch']);
+		if (!preg_match('/^\d+\.\d+(\.\d+)?$/', $ver)) adminJson(422, ['error' => 'Ungueltige Versionsnummer']);
+		file_put_contents($dir . '/version.txt', $ver . "\n");
+		adminJson(200, ['ok' => true, 'sketch' => $sketch, 'version' => $ver]);
+	})(),
+
+	// POST api/ota/upload  (multipart: sketch + firmware)
+	$sub === 'ota/upload' && $method === 'POST' => (function () {
+		$sketch = preg_replace('/[^a-z0-9_\-]/', '', strtolower($_POST['sketch'] ?? ''));
+		$dir    = dirname(__DIR__) . '/ota/firmware/' . $sketch;
+		if ($sketch === '' || !is_dir($dir)) adminJson(422, ['error' => 'Unbekannter Sketch']);
+		$tmp = $_FILES['firmware']['tmp_name'] ?? '';
+		if (!$tmp || !is_uploaded_file($tmp)) adminJson(422, ['error' => 'Keine Datei empfangen']);
+		$dest = $dir . '/firmware.bin';
+		if (!move_uploaded_file($tmp, $dest)) adminJson(500, ['error' => 'Fehler beim Speichern']);
+		adminJson(200, ['ok' => true, 'sketch' => $sketch, 'size' => filesize($dest)]);
+	})(),
 };

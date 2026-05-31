@@ -17,7 +17,8 @@ $exclude = @(
 	"diag.php",
 	".setup_done",
 	"*.bin",
-	".gitkeep"
+	".gitkeep",
+	"firmware.bin"
 )
 
 # Zielordner anlegen falls nicht vorhanden
@@ -38,8 +39,9 @@ Get-ChildItem $src -Recurse -File | ForEach-Object {
 		if ($file.Name -like $pattern) { $skip = $true; break }
 	}
 
-	# firmware/-Unterordner komplett ausschliessen (nur .gitkeep behalten)
-	if ($file.FullName -match [regex]::Escape("ota\firmware\") -and $file.Name -ne ".gitkeep") {
+	# firmware/-Unterordner: nur .bin und .gitkeep ausschliessen,
+	# version.txt, .htaccess und Ordnerstruktur werden benoetigt damit die Hardware den richtigen Pfad findet
+	if ($file.FullName -match [regex]::Escape("ota\firmware\") -and $file.Name -notin @("version.txt", ".htaccess")) {
 		$skip = $true
 	}
 

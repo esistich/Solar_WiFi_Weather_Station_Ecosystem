@@ -50,13 +50,13 @@ class Measurement {
 	  humidity:      _toDouble(json['humidity']),
 	  relPressure:   _toDouble(json['rel_pressure']),
 	  absPressure:   _toDouble(json['abs_pressure']),
-	  pressureState: json['pressure_state'] as String? ?? '',
-	  zambretti:     json['zambretti']      as String? ?? '',
-	  trend:         json['trend']          as String? ?? '',
+	  pressureState: _toStr(json['pressure_state']) ?? '',
+	  zambretti:     _toStr(json['zambretti_text']) ?? _toStr(json['zambretti']) ?? '',
+	  trend:         _toStr(json['trend_text']) ?? '',
 	  batteryPct:    (json['battery_pct']   as num?)?.toInt() ?? 0,
 	  batteryVolt:   _toDouble(json['battery_volt']),
 	  wifiStrength:  (json['wifi_strength'] as num?)?.toInt() ?? 0,
-	  createdAt:     json['created_at']     as String? ?? '',
+	  createdAt:     _toStr(json['created_at']) ?? '',
 	  dataAgeSeconds:(json['data_age_s']    as num?)?.toInt() ?? 0,
 	);
   }
@@ -66,6 +66,12 @@ class Measurement {
 	if (v is double) return v;
 	if (v is int) return v.toDouble();
 	return double.tryParse(v.toString()) ?? 0.0;
+  }
+
+  static String? _toStr(dynamic v) {
+	if (v == null) return null;
+	if (v is String) return v.isEmpty ? null : v;
+	return v.toString();
   }
 }
 

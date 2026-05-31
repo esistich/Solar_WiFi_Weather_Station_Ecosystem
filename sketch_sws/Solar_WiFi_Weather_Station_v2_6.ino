@@ -761,23 +761,17 @@ static String replaceMarker(const String& src, const char* marker, const char* r
 // Liegt eine hoehere Version vor, wird die Firmware geflasht und der ESP neugestartet.
 // Bei Fehler oder nicht erreichbarem Server: Warnung ins Log, normaler Weiterstart.
 static void checkForOTA() {
-  String otaBase = String(cfg.api_https ? "https" : "http") +
-                   "://" + cfg.api_host +
+  // Versionscheck und Firmware-Download beide ueber HTTP –
+  // WiFiClientSecure wuerde auf ESP8266 zu viel RAM belegen und den TCP-Stack blockieren.
+  String otaBase = String("http://") + cfg.api_host +
                    CFG_OTA_BASE_PATH "/" CFG_OTA_SKETCH_ID;
-  String versionUrl = otaBase + "/version.txt";
+  String versionUrl  = otaBase + "/version.txt";
   String firmwareUrl = otaBase + "/firmware.bin";
 
   Serial.print("OTA: Versionscheck -> ");
   Serial.println(versionUrl);
 
-  std::unique_ptr<WiFiClient> client;
-  if (cfg.api_https) {
-    WiFiClientSecure* sc = new WiFiClientSecure();
-    sc->setInsecure();   // Zertifikat nicht pruefen (kein CA-Bundle auf ESP8266)
-    client.reset(sc);
-  } else {
-    client.reset(new WiFiClient());
-  }
+  std::unique_ptr<WiFiClient> client(new WiFiClient());
 
   HTTPClient http;
   http.setTimeout(CFG_OTA_TIMEOUT_MS);
@@ -823,21 +817,17 @@ static void checkForOTA() {
   ESPhttpUpdate.setLedPin(LED_BUILTIN, LOW);
   ESPhttpUpdate.rebootOnUpdate(true);
 
-  if (cfg.api_https) {
-    WiFiClientSecure sc;
-    sc.setInsecure();
-    t_httpUpdate_return ret = ESPhttpUpdate.update(sc, firmwareUrl);
-    if (ret != HTTP_UPDATE_OK) {
-      Serial.printf("OTA: Flash fehlgeschlagen (%d): %s\n",
-                    ESPhttpUpdate.getLastError(),
-                    ESPhttpUpdate.getLastErrorString().c_str());
-      #if USE_API
-      logToAPI("error", "OTA_FLASH_FAILED", ESPhttpUpdate.getLastErrorString().c_str());
-      #endif
-    }
-  } else {
+  // WiFiClientSecure freigeben bevor ESPhttpUpdate einen neuen Client oeffnet
+  client.reset();
+  delay(500);  // TCP-Stack Zeit geben die HTTPS-Verbindung zu schliessen
+
+  // ESPhttpUpdate benoetigt einen eigenen Client; HTTPS schlaegt auf ESP8266 wegen
+  // RAM-Knappheit beim Flash haeufig fehl – OTA daher immer ueber HTTP.
+  if (strlen(cfg.api_user) > 0) ESPhttpUpdate.setAuthorization(cfg.api_user, cfg.api_pass);
+  String firmwareUrlHttp = String("http://") + cfg.api_host + CFG_OTA_BASE_PATH "/" CFG_OTA_SKETCH_ID "/firmware.bin";
+  {
     WiFiClient wc;
-    t_httpUpdate_return ret = ESPhttpUpdate.update(wc, firmwareUrl);
+    t_httpUpdate_return ret = ESPhttpUpdate.update(wc, firmwareUrlHttp);
     if (ret != HTTP_UPDATE_OK) {
       Serial.printf("OTA: Flash fehlgeschlagen (%d): %s\n",
                     ESPhttpUpdate.getLastError(),

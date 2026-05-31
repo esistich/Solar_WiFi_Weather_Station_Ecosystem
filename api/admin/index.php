@@ -82,6 +82,7 @@ if (!$loggedIn): ?>
   <a href="#live"      class="nav-link" data-section="live">Live-Daten</a>
   <a href="#credentials" class="nav-link" data-section="credentials">🔐 Credentials</a>
   <a href="#errorlog"  class="nav-link" data-section="errorlog">⚠️ Fehler-Log</a>
+  <a href="#ota"       class="nav-link" data-section="ota">📦 OTA-Firmware</a>
   <a href="?action=logout" class="nav-link logout">Abmelden</a>
 </nav>
 <main class="content">
@@ -169,6 +170,37 @@ if (!$loggedIn): ?>
 	  <button class="btn-add" onclick="loadErrorLog()">Aktualisieren</button>
 	</div>
 	<div id="errorlog-table"></div>
+  </section>
+
+  <section id="ota" class="section hidden">
+    <h2>&#x1F4E6; OTA-Firmware</h2>
+
+    <div id="ota-cards"></div>
+
+    <div class="ota-upload-panel" id="ota-upload-panel">
+      <h3>&#x2B06;&#xFE0F; Neues Firmware-Update hochladen</h3>
+      <form id="ota-upload-form" onsubmit="otaUpload(event)" class="ota-form">
+        <label>
+          Hardware / Sketch
+          <select name="sketch" id="ota-sketch-select" required>
+            <option value="">– wird geladen –</option>
+          </select>
+        </label>
+        <label>
+          Neue Version
+          <input type="text" name="version" id="ota-version-input"
+                 placeholder="z.B. 2.7.2" pattern="\d+\.\d+(\.\d+)?" required>
+        </label>
+        <label>
+          Firmware-Datei (.bin)
+          <input type="file" name="firmware" accept=".bin" required>
+        </label>
+        <div class="btn-row">
+          <button type="submit" class="btn-save" id="ota-submit-btn">&#x1F4E4; Hochladen &amp; aktivieren</button>
+        </div>
+      </form>
+      <div id="ota-upload-msg"></div>
+    </div>
   </section>
 </main>
 
