@@ -9,6 +9,7 @@ class TileCard extends StatelessWidget {
   final String? error;
   final VoidCallback onTap;
   final VoidCallback onRefresh;
+  final VoidCallback? onEdit;
 
   const TileCard({
 	super.key,
@@ -18,6 +19,7 @@ class TileCard extends StatelessWidget {
 	required this.error,
 	required this.onTap,
 	required this.onRefresh,
+	this.onEdit,
   });
 
   @override
@@ -38,6 +40,7 @@ class TileCard extends StatelessWidget {
 	  ),
 	  child: InkWell(
 		onTap: onTap,
+		onLongPress: onEdit,
 		child: Padding(
 		  padding: const EdgeInsets.all(16),
 		  child: Column(

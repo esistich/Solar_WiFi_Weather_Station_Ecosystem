@@ -83,6 +83,12 @@ class _HomeScreenState extends State<HomeScreen> {
 						builder: (_) => DetailScreen(device: device),
 					  ),
 					),
+					onEdit: () => Navigator.push(
+					  context,
+					  MaterialPageRoute(
+						builder: (_) => DeviceSetupScreen(device: device),
+					  ),
+					),
 					onRefresh: () =>
 						provider.refreshDevice(device.id),
 				  ),

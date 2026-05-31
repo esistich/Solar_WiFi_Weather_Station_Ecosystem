@@ -9,7 +9,8 @@ import '../services/services.dart';
 ///  2. Soft-AP: Mit ESP-Hotspot verbinden → Config senden
 ///  3. Gerät benennen und speichern
 class DeviceSetupScreen extends StatefulWidget {
-  const DeviceSetupScreen({super.key});
+  final Device? device; // gesetzt = Edit-Modus
+  const DeviceSetupScreen({super.key, this.device});
 
   @override
   State<DeviceSetupScreen> createState() => _DeviceSetupScreenState();
@@ -30,6 +31,22 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   final _stationSlugCtrl = TextEditingController();
   bool _apiHttps         = true;
 
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.device;
+    if (d != null) {
+      _nameCtrl.text        = d.name;
+      _apiHostCtrl.text     = d.apiHost;
+      _apiPathCtrl.text     = d.apiPath;
+      _apiUserCtrl.text     = d.apiUser;
+      _apiPassCtrl.text     = d.apiPassword;
+      _stationSlugCtrl.text = d.stationSlug;
+      _apiHttps             = d.apiHttps;
+      _step = 2; // direkt in Formular-Schritt
+    }
+  }
+
   // Soft-AP spezifisch
   final _ssidCtrl    = TextEditingController();
   final _passCtrl    = TextEditingController();
@@ -47,7 +64,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   Widget build(BuildContext context) {
 	return Scaffold(
 	  appBar: AppBar(
-		title: const Text('Gerät hinzufügen'),
+		title: Text(widget.device != null ? 'Gerät bearbeiten' : 'Gerät hinzufügen'),
 		leading: _step > 0
 			? IconButton(
 				icon: const Icon(Icons.arrow_back),
@@ -159,8 +176,9 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   }
 
   Future<void> _addDevice() async {
+	final existing = widget.device;
 	final device = Device(
-	  id:          const Uuid().v4(),
+	  id:          existing?.id ?? const Uuid().v4(),
 	  name:        _nameCtrl.text.trim().isEmpty ? 'Station' : _nameCtrl.text.trim(),
 	  apiHost:     _apiHostCtrl.text.trim(),
 	  apiPath:     _apiPathCtrl.text.trim(),
@@ -170,7 +188,12 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
 	  stationSlug: _stationSlugCtrl.text.trim(),
 	);
 	if (!mounted) return;
-	await context.read<DeviceProvider>().addDevice(device);
+	final provider = context.read<DeviceProvider>();
+	if (existing != null) {
+	  await provider.updateDevice(device);
+	} else {
+	  await provider.addDevice(device);
+	}
   }
 
   void _showSnack(String msg) {
