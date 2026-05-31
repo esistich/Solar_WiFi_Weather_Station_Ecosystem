@@ -8,6 +8,8 @@ build/
 *.bin
 *.elf
 *.map
+# OTA-Firmware-Uploads (werden nur auf dem Server abgelegt, nicht im Repo)
+api/ota/firmware/**/*.bin
 # Secrets – niemals committen
 jwt_secret.php
 *firebase*adminsdk*.json
