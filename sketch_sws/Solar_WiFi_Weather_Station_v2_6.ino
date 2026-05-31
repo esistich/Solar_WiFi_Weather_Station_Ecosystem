@@ -1,4 +1,4 @@
-/*----------------------------------------------------------------------------------------------------
+ï»¿/*----------------------------------------------------------------------------------------------------
   Project Name : Solar Powered WiFi Weather Station V2.7
   Features: temperature, dewpoint, dewpoint spread, heat index, humidity, absolute pressure, relative pressure, battery status and
   the famous Zambretti Forecaster (multi lingual)
@@ -15,7 +15,7 @@
   Version History (recent):
 
   v2.7 (2025/2026) - API-only Edition
-  - MQTT vollstÃ¤ndig entfernt â?" Station sendet ausschlieÃYlich an REST-API
+  - MQTT vollstÃ¤ndig entfernt ï¿½?" Station sendet ausschlieï¿½Ylich an REST-API
   - Blynk entfernt
   - SHT45 entfernt (nur noch BME280 + DS18B20)
   - Status-LED entfernt
@@ -30,12 +30,12 @@
     - schema.sql : vollstÃ¤ndiges Datenbankschema
   - sendToAPI(): HTTP/HTTPS, Basic-Auth, Zambretti-Felder eingeschlossen
   - DS18B20 Pooltemperatur auf D7 (GPIO13)
-  - USB-Betrieb erkannt (volt < 0.5 V â?' normaler Schlaf statt Dauerschlaf)
+  - USB-Betrieb erkannt (volt < 0.5 V ï¿½?' normaler Schlaf statt Dauerschlaf)
 
   v2.6 (April 2026) - Configurable sensors & robustness pass
   - Sensors: BME280 + DS18B20
   - BME280 immer primaer; USE_DS18B20 = optionaler Zusatzfuehler (pool_temperature)
-  - Bugfixes: getTemperature(), SPIFFS-Fehlerbehandlung, Battery-ADC (16Ã-),
+  - Bugfixes: getTemperature(), SPIFFS-Fehlerbehandlung, Battery-ADC (16ï¿½-),
     NTP-yield(), Zambretti-Hysterese, ESP.restart() statt resetFunc
 
   Features:
@@ -78,7 +78,17 @@
 #include "FS.h"
 #include <EasyNTPClient.h>          // https://github.com/aharshac/EasyNTPClient
 #include <TimeLib.h>                // https://github.com/PaulStoffregen/Time.git
-// PubSubClient (MQTT) wurde entfernt â?" Station arbeitet ausschließlich mit REST-API
+
+// =====================================================================
+// Vorwaerts-Deklarationen
+// =====================================================================
+void measurementEvent();
+void sendToAPI();
+void goToSleep(unsigned int sleepmin);
+#if USE_DS18B20
+float getTemperature();
+#endif
+// PubSubClient (MQTT) wurde entfernt
 
 // =====================================================================
 // Laufzeit-Konfiguration (geladen aus EEPROM, Fallback: CFG_DEFAULT_*)
@@ -101,7 +111,7 @@ struct StationConfig {
   int   sleep_min;
 };
 
-StationConfig cfg;  // globale Instanz â?" Ã¼berall im Sketch verwendet
+StationConfig cfg;  // globale Instanz ï¿½?" Ã¼berall im Sketch verwendet
 
 #if USE_API
 static SWSApiClient* apiClient = nullptr;
@@ -154,7 +164,7 @@ void loadConfig() {
     if (EEPROM.read(i) != EEPROM_MAGIC[i]) { valid = false; break; }
   }
   if (!valid) {
-    Serial.println("EEPROM leer/ungÃ¼ltig â?" verwende Compile-Zeit-Defaults.");
+    Serial.println("EEPROM leer/ungueltig - verwende Compile-Zeit-Defaults.");
     return;
   }
 
@@ -165,7 +175,7 @@ void loadConfig() {
   }
   JsonDocument doc;
   if (deserializeJson(doc, buf) != DeserializationError::Ok) {
-    Serial.println("EEPROM-JSON ungÃ¼ltig â?" verwende Compile-Zeit-Defaults.");
+    Serial.println("EEPROM-JSON ungueltig - verwende Compile-Zeit-Defaults.");
     return;
   }
 
@@ -245,6 +255,13 @@ int batterypercentage;
 int rel_pressure_rounded;
 double DewpointTemperature;
 float DewPointSpread;               // Difference between actual temperature and dewpoint
+int pressure_idx = 0;               // Index in LANG_PRESSURE[] (0=STORM_LOW .. 4=STRONG_HIGH)
+
+// Druckzustand als Klartext (aus aktuellem pressure_idx)
+static const char* pressure_in_words() {
+  if (pressure_idx < 0 || pressure_idx > 4) return "?";
+  return LANG_PRESSURE[pressure_idx];
+}
 
 //variables for trend calculation
 unsigned long current_timestamp;    // UTC-Timestamp von NTP (Sekunden seit 1.1.1970)
@@ -315,7 +332,7 @@ void startConfigPortal() {
   WiFi.mode(WIFI_AP);
   delay(100);
   bool apOk = WiFi.softAP(CONFIG_AP_SSID);   // kein Passwort = offener AP
-  delay(500);   // AP braucht ~300â?"500 ms bis er sichtbar ist
+  delay(500);   // AP braucht ~300ï¿½?"500 ms bis er sichtbar ist
 
   if (!apOk) {
     Serial.println("FEHLER: softAP() fehlgeschlagen! Neustart...");
@@ -434,13 +451,13 @@ void startConfigPortal() {
 
   server.begin();
 
-  Serial.println("Warte auf Konfiguration (kein Timeout â?" Neustart erfolgt nach dem Speichern)...");
+  Serial.println("Warte auf Konfiguration (kein Timeout - Neustart erfolgt nach dem Speichern)...");
 
   while (true) {
     server.handleClient();
     yield();
   }
-  // Kein Timeout: Das Portal lÃ¤uft bis der Nutzer speichert (/save â?' ESP.restart())
+  // Kein Timeout: Das Portal lÃ¤uft bis der Nutzer speichert (/save ï¿½?' ESP.restart())
   // oder einen Hardware-Reset auslÃ¶st.
 }
 
@@ -470,7 +487,8 @@ void setup() {
   Serial.print(", Version ");
   Serial.println(Version);
 
-  Serial.print("Sensors: BME280=Y  DS18B20=");\r\n  Serial.println(USE_DS18B20 ? "Y" : "N");
+  Serial.print("Sensors: BME280=Y  DS18B20=");
+  Serial.println(USE_DS18B20 ? "Y" : "N");
 
   Serial.print("Language: ");
   Serial.println(LANG_NAME);
@@ -514,7 +532,7 @@ void setup() {
         goToSleep(10);   // go to sleep and retry after 10 min
       }
       else {
-        goToSleep(0);   // Batterie leer: ESP.deepSleep(0) = permanenter Schlaf, Wake nur per Reset-Pin (RSTâ?'GND)
+        goToSleep(0);   // Batterie leer: ESP.deepSleep(0) = permanenter Schlaf, Wake nur per Reset-Pin (RST->GND)
       }
     }
     Serial.print(".");
@@ -527,7 +545,7 @@ void setup() {
 
   Serial.println("SPIFFS Initialisierung...");
   if (!SPIFFS.begin()) {
-    Serial.println("SPIFFS nicht formatiert â?" wird formatiert (bis zu 30 s)...");
+    Serial.println("SPIFFS nicht formatiert - wird formatiert (bis zu 30 s)...");
     SPIFFS.format();
     SPIFFS.begin();
   }
@@ -599,13 +617,13 @@ measurementEvent();             // calling function to get all data from the dif
 #endif
 
   if (volt < 0.5) {
-    Serial.println("Kein Akku erkannt (USB-Betrieb) â?" normaler Schlaf.");
+    Serial.println("Kein Akku erkannt (USB-Betrieb) - normaler Schlaf.");
     goToSleep(cfg.sleep_min);
   } else if (volt > 3.4) {
     goToSleep(cfg.sleep_min);
   }
   else {
-    goToSleep(0);   // Batterie leer: ESP.deepSleep(0) = permanenter Schlaf, Wake nur per Reset-Pin (RSTâ?'GND)
+    goToSleep(0);   // Batterie leer: ESP.deepSleep(0) = permanenter Schlaf, Wake nur per Reset-Pin (RST->GND)
   }
 } // end of void setup()
 
@@ -625,7 +643,7 @@ void measurementEvent() {
 
   Serial.print("Temp: ");
   Serial.print(measured_temp);
-  Serial.print("°C; Humidity: ");
+  Serial.print("Â°C; Humidity: ");
   Serial.print(measured_humi);
   Serial.println("%; ");
 
@@ -843,14 +861,14 @@ static void checkForOTA() {
 
 // ZambrettiSays() wurde in die API ausgelagert (api/v1/zambretti.php).
 
-// ReadFromSPIFFS() / WriteToSPIFFS() / FirstTimeRun() wurden entfernt â?"
+// ReadFromSPIFFS() / WriteToSPIFFS() / FirstTimeRun() wurden entfernt ï¿½?"
 // Druckverlauf wird jetzt server-seitig in der DB gespeichert.
 
 
 
 #if USE_DS18B20
 float getTemperature() {
-  // Bis zu 3 Versuche â?" DS18B20 braucht manchmal einen zweiten Anlauf
+  // Bis zu 3 Versuche ï¿½?" DS18B20 braucht manchmal einen zweiten Anlauf
   // (typisch bei fehlendem oder zu schwachem Pull-up-Widerstand).
   for (int attempt = 1; attempt <= 3; attempt++) {
     s18d20.requestTemperatures();
@@ -877,7 +895,7 @@ float getTemperature() {
 
 // =====================================================================
 // Base64-Enkodierung (minimal, fÃ¼r HTTP Basic Auth)
-// Keine externe Bibliothek nÃ¶tig â?" der ESP8266 Arduino Core enthÃ¤lt
+// Keine externe Bibliothek nÃ¶tig ï¿½?" der ESP8266 Arduino Core enthÃ¤lt
 // keine stdlib-Base64, daher diese schlanke Inline-Implementierung.
 #if USE_API
 // sendToAPI() - sendet Messdaten per HTTP(S) POST via SWSApiClient.
@@ -886,7 +904,7 @@ void sendToAPI() {
   SWSResult result = apiClient
     ->set("temperature",   adjusted_temp)
     .set("humidity",       adjusted_humi)
-    .set("dewpoint",       DewpointTemperature)
+    .set("dewpoint",       (float)DewpointTemperature)
     .set("dewpointspread", DewPointSpread)
     .set("rel_pressure",   rel_pressure_rounded)
     .set("abs_pressure",   measured_pres)
