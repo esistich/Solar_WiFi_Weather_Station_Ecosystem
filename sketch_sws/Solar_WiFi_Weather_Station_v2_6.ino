@@ -860,8 +860,15 @@ void sendToAPI() {
   jsonDoc["wifi_strength"]   = (int)WiFi.RSSI();
   jsonDoc["timestamp"]       = current_timestamp;  // UTC Unix-Timestamp (API erwartet UTC)
 
-  char payload[640];
-  serializeJson(jsonDoc, payload);
+  char payload[768];  // Groesse: ~640 Basis + 128 Reserve fuer pool_temperature + station_name
+  size_t written = serializeJson(jsonDoc, payload, sizeof(payload));
+  if (written == 0 || written >= sizeof(payload) - 1) {
+    Serial.println("WARNUNG: JSON-Payload abgeschnitten! Buffer erhoehen.");
+  }
+  Serial.print("API Payload (");
+  Serial.print(written);
+  Serial.print(" Bytes): ");
+  Serial.println(payload);
 
   // Basic-Auth-Header vorbereiten
   String credentials = base64Encode(String(cfg.api_user) + ":" + String(cfg.api_pass));
