@@ -24,3 +24,5 @@ api/*adminsdk*.json
 # Flutter Firebase-Konfiguration (lokal regenerieren: flutterfire configure)
 app/lib/firebase_options.dart
 api/install/.setup_done
+
+api/*_diag.php
