@@ -857,12 +857,12 @@ void sendToAPI() {
   jsonDoc["humidity"]         = adjusted_humi;
   jsonDoc["dewpoint"]         = DewpointTemperature;
   jsonDoc["dewpointspread"]   = DewPointSpread;
-  jsonDoc["relativepressure"]= rel_pressure_rounded;
-  jsonDoc["absolutepressure"]= measured_pres;
+  jsonDoc["rel_pressure"]    = rel_pressure_rounded;
+  jsonDoc["abs_pressure"]    = measured_pres;
   jsonDoc["heatindex"]       = HeatIndex;
   // Zambretti/Trend/pressurestate werden jetzt server-seitig von der API berechnet.
-  jsonDoc["battery"]         = volt;
-  jsonDoc["batterypercentage"]= batterypercentage;
+  jsonDoc["battery_volt"]    = volt;
+  jsonDoc["battery_pct"]     = batterypercentage;
   jsonDoc["wifi_strength"]   = (int)WiFi.RSSI();
   jsonDoc["timestamp"]       = current_timestamp;  // UTC Unix-Timestamp (API erwartet UTC)
 
