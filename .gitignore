@@ -18,7 +18,7 @@ upload_package.zip
 
 # API-Konfigurationsdateien mit echten Credentials (nur .example-Vorlagen committen)
 api/config/db.php
-api/config/auth.php
+api/config/credentials.php
 api/lib/auth.php
 api/lib/db.php
 
