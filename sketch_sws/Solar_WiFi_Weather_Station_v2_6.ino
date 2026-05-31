@@ -1,8 +1,8 @@
-﻿/*----------------------------------------------------------------------------------------------------
+/*----------------------------------------------------------------------------------------------------
   Project Name : Solar Powered WiFi Weather Station V2.7
   Features: temperature, dewpoint, dewpoint spread, heat index, humidity, absolute pressure, relative pressure, battery status and
   the famous Zambretti Forecaster (multi lingual)
-  Authors: Keith Hungerford, Debasish Dutta and Marc StÃ¤hli
+  Authors: Keith Hungerford, Debasish Dutta and Marc Stähli
   Website : www.opengreenenergy.com
 
   Main microcontroller (ESP8266) and BME280 both sleep between measurements
@@ -15,35 +15,35 @@
   Version History (recent):
 
   v2.7 (2025/2026) - API-only Edition
-  - MQTT vollstÃ¤ndig entfernt â€“ Station sendet ausschlieÃŸlich an REST-API
+  - MQTT vollständig entfernt �?" Station sendet ausschlie�Ylich an REST-API
   - Blynk entfernt
   - SHT45 entfernt (nur noch BME280 + DS18B20)
   - Status-LED entfernt
-  - AP-Konfigurations-Portal (Button D6 beim Boot gedrÃ¼ckt halten):
-    - ESP8266 Ã¶ffnet WLAN-Accesspoint "SWS-Config"
+  - AP-Konfigurations-Portal (Button D6 beim Boot gedrückt halten):
+    - ESP8266 öffnet WLAN-Accesspoint "SWS-Config"
     - Webinterface unter 192.168.4.1 (kein Timeout, Neustart nur per Speichern)
     - Einstellungen als JSON im EEPROM (Magic: SWS2)
   - PHP/MySQL-REST-API (api/):
     - data.php   : POST neue Messung / GET letzten Datensatz
     - history.php: GET Historien-Daten (limit, from, to)
     - status.php : Systemstatus
-    - schema.sql : vollstÃ¤ndiges Datenbankschema
+    - schema.sql : vollständiges Datenbankschema
   - sendToAPI(): HTTP/HTTPS, Basic-Auth, Zambretti-Felder eingeschlossen
   - DS18B20 Pooltemperatur auf D7 (GPIO13)
-  - USB-Betrieb erkannt (volt < 0.5 V â†’ normaler Schlaf statt Dauerschlaf)
+  - USB-Betrieb erkannt (volt < 0.5 V �?' normaler Schlaf statt Dauerschlaf)
 
   v2.6 (April 2026) - Configurable sensors & robustness pass
   - Sensors: BME280 + DS18B20
   - USE_BME280, USE_DS18B20, TEMP_SOURCE konfigurierbar
-  - Bugfixes: getTemperature(), SPIFFS-Fehlerbehandlung, Battery-ADC (16Ã—),
+  - Bugfixes: getTemperature(), SPIFFS-Fehlerbehandlung, Battery-ADC (16�-),
     NTP-yield(), Zambretti-Hysterese, ESP.restart() statt resetFunc
 
   Features:
   // 1. WiFi-Verbindung, Messung, Upload an PHP/MySQL-REST-API
-  // 2. Temperatur, Taupunkt, WÃ¤rmeindex, Luftfeuchtigkeit, Luftdruck (abs+rel)
+  // 2. Temperatur, Taupunkt, Wärmeindex, Luftfeuchtigkeit, Luftdruck (abs+rel)
   // 3. Zambretti-Wetterprognose (mehrsprachig)
   // 4. Pooltemperatur (DS18B20)
-  // 5. Batterie-/USB-StatusÃ¼berwachung
+  // 5. Batterie-/USB-Statusüberwachung
   // 6. Deep-Sleep zwischen Messungen
 
   /***************************************************
@@ -88,16 +88,15 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
 #include <ESP8266WiFi.h>
-#include <ESP8266HTTPClient.h>
-#include <WiFiClientSecure.h>
 #include <ESP8266WebServer.h>       // Konfigurations-Portal
 #include <EEPROM.h>                 // Persistente Einstellungen
 #include <ArduinoJson.h>
 #include <WiFiUdp.h>
+#include <SWSApiClient.h>           // SWS REST-API Bibliothek
 #include "FS.h"
 #include <EasyNTPClient.h>          // https://github.com/aharshac/EasyNTPClient
 #include <TimeLib.h>                // https://github.com/PaulStoffregen/Time.git
-// PubSubClient (MQTT) wurde entfernt â€“ Station arbeitet ausschlieÃŸlich mit REST-API
+// PubSubClient (MQTT) wurde entfernt �?" Station arbeitet ausschlie�Ylich mit REST-API
 
 // =====================================================================
 // Laufzeit-Konfiguration (geladen aus EEPROM, Fallback: CFG_DEFAULT_*)
@@ -120,9 +119,26 @@ struct StationConfig {
   int   sleep_min;
 };
 
-StationConfig cfg;  // globale Instanz â€“ Ã¼berall im Sketch verwendet
+StationConfig cfg;  // globale Instanz �?" überall im Sketch verwendet
 
-// EEPROM-Magic-Bytes: zeigen an, dass gÃ¼ltige Daten gespeichert sind
+#if USE_API
+static SWSApiClient* apiClient = nullptr;
+
+static void initApiClient() {
+  delete apiClient;
+  apiClient = new SWSApiClient(cfg.api_host, cfg.api_path,
+                               cfg.api_user, cfg.api_pass, cfg.api_https);
+  apiClient->setStationName(cfg.station_name);
+}
+
+static void logToAPI(const char* level, const char* code,
+                     const char* message, const char* context = nullptr) {
+  if (!apiClient) return;
+  apiClient->logError(level, code, message, context);
+}
+#endif  // USE_API
+
+// EEPROM-Magic-Bytes: zeigen an, dass gültige Daten gespeichert sind
 static const uint8_t EEPROM_MAGIC[4] = { 0x53, 0x57, 0x53, 0x32 };  // "SWS2"
 static const int     EEPROM_SIZE     = 2048;
 static const int     EEPROM_DATA_OFFSET = 4;
@@ -145,18 +161,18 @@ static void applyDefaults() {
 }
 
 void loadConfig() {
-  // Erst Defaults setzen, dann ggf. mit EEPROM-Werten Ã¼berschreiben
+  // Erst Defaults setzen, dann ggf. mit EEPROM-Werten überschreiben
   applyDefaults();
 
   EEPROM.begin(EEPROM_SIZE);
 
-  // Magic-Bytes prÃ¼fen
+  // Magic-Bytes prüfen
   bool valid = true;
   for (int i = 0; i < 4; i++) {
     if (EEPROM.read(i) != EEPROM_MAGIC[i]) { valid = false; break; }
   }
   if (!valid) {
-    Serial.println("EEPROM leer/ungÃ¼ltig â€“ verwende Compile-Zeit-Defaults.");
+    Serial.println("EEPROM leer/ungültig �?" verwende Compile-Zeit-Defaults.");
     return;
   }
 
@@ -167,11 +183,11 @@ void loadConfig() {
   }
   JsonDocument doc;
   if (deserializeJson(doc, buf) != DeserializationError::Ok) {
-    Serial.println("EEPROM-JSON ungÃ¼ltig â€“ verwende Compile-Zeit-Defaults.");
+    Serial.println("EEPROM-JSON ungültig �?" verwende Compile-Zeit-Defaults.");
     return;
   }
 
-  // Nur vorhandene EEPROM-Felder Ã¼berschreiben; fehlende behalten den Default
+  // Nur vorhandene EEPROM-Felder überschreiben; fehlende behalten den Default
   if (doc["station_name"].is<const char*>())     strlcpy(cfg.station_name,     doc["station_name"],     sizeof(cfg.station_name));
   if (doc["wifi_ssid"].is<const char*>())        strlcpy(cfg.wifi_ssid,        doc["wifi_ssid"],        sizeof(cfg.wifi_ssid));
   if (doc["wifi_pass"].is<const char*>())        strlcpy(cfg.wifi_pass,        doc["wifi_pass"],        sizeof(cfg.wifi_pass));
@@ -220,7 +236,7 @@ void saveConfig() {
 
 #if USE_DS18B20
   #define ONE_WIRE_BUS 13            // Data wire 18d20 Sensor is plugged into port D7 @ ESP8266
-  #define DS18B20_RESOLUTION 12      // 12-bit -> 0.0625Â°C, conversion ~750ms
+  #define DS18B20_RESOLUTION 12      // 12-bit -> 0.0625°C, conversion ~750ms
 #endif
 
 Adafruit_BME280 bme;                // I2C
@@ -246,7 +262,7 @@ float adjusted_humi;
 float pool_temp = -88;  // DS18B20 Pooltemperatur (-88 = kein Sensor / Fehler)
 float measured_pres;
 float SLpressure_hPa;               // needed for rel pressure calculation
-float HeatIndex;                    // Heat Index in Â°C
+float HeatIndex;                    // Heat Index in °C
 float volt;
 int batterypercentage;
 int rel_pressure_rounded;
@@ -306,7 +322,7 @@ static unsigned long localTimestamp(unsigned long utcEpoch) {
 // =====================================================================
 // Konfigurations-Portal
 // Gestartet wenn CONFIG_BUTTON_PIN beim Aufwachen LOW ist.
-// Der ESP Ã¶ffnet einen Access Point (SSID: SWS-Config) und stellt
+// Der ESP öffnet einen Access Point (SSID: SWS-Config) und stellt
 // unter http://192.168.4.1 ein HTML-Formular bereit.
 // Nach dem Speichern startet der ESP automatisch neu (kein Timeout).
 // =====================================================================
@@ -322,7 +338,7 @@ void startConfigPortal() {
   WiFi.mode(WIFI_AP);
   delay(100);
   bool apOk = WiFi.softAP(CONFIG_AP_SSID);   // kein Passwort = offener AP
-  delay(500);   // AP braucht ~300â€“500 ms bis er sichtbar ist
+  delay(500);   // AP braucht ~300�?"500 ms bis er sichtbar ist
 
   if (!apOk) {
     Serial.println("FEHLER: softAP() fehlgeschlagen! Neustart...");
@@ -394,8 +410,8 @@ void startConfigPortal() {
     html += field("Passwort", "api_pass", cfg.api_pass, 32);
 
     html += "</table><h2>Sonstiges</h2><table>";
-    html += fieldFloat("Temp-Korrektur (Â°C)", "temp_corr", cfg.temp_corr);
-    html += fieldInt("HÃ¶he Ã¼. NN (m)", "elevation", cfg.elevation);
+    html += fieldFloat("Temp-Korrektur (°C)", "temp_corr", cfg.temp_corr);
+    html += fieldInt("Höhe ü. NN (m)", "elevation", cfg.elevation);
     html += fieldInt("Schlafzeit (min)", "sleep_min", cfg.sleep_min);
 
     html += R"(</table>
@@ -441,14 +457,14 @@ void startConfigPortal() {
 
   server.begin();
 
-  Serial.println("Warte auf Konfiguration (kein Timeout â€“ Neustart erfolgt nach dem Speichern)...");
+  Serial.println("Warte auf Konfiguration (kein Timeout �?" Neustart erfolgt nach dem Speichern)...");
 
   while (true) {
     server.handleClient();
     yield();
   }
-  // Kein Timeout: Das Portal lÃ¤uft bis der Nutzer speichert (/save â†’ ESP.restart())
-  // oder einen Hardware-Reset auslÃ¶st.
+  // Kein Timeout: Das Portal läuft bis der Nutzer speichert (/save �?' ESP.restart())
+  // oder einen Hardware-Reset auslöst.
 }
 
 void setup() {
@@ -460,11 +476,16 @@ void setup() {
   // Konfiguration aus EEPROM laden (oder Defaults verwenden)
   loadConfig();
 
-  // Konfigurations-Portal prÃ¼fen: Button (CONFIG_BUTTON_PIN) beim Start LOW?
+  // API-Client initialisieren
+  #if USE_API
+  initApiClient();
+  #endif
+
+  // Konfigurations-Portal prüfen: Button (CONFIG_BUTTON_PIN) beim Start LOW?
   pinMode(CONFIG_BUTTON_PIN, INPUT_PULLUP);
   delay(10);
   if (digitalRead(CONFIG_BUTTON_PIN) == LOW) {
-    startConfigPortal();   // kehrt nicht zurÃ¼ck (Neustart am Ende)
+    startConfigPortal();   // kehrt nicht zurück (Neustart am Ende)
   }
 
   Serial.print("Start of ");
@@ -527,7 +548,7 @@ void setup() {
         goToSleep(10);   // go to sleep and retry after 10 min
       }
       else {
-        goToSleep(0);   // Batterie leer: ESP.deepSleep(0) = permanenter Schlaf, Wake nur per Reset-Pin (RSTâ†’GND)
+        goToSleep(0);   // Batterie leer: ESP.deepSleep(0) = permanenter Schlaf, Wake nur per Reset-Pin (RST�?'GND)
       }
     }
     Serial.print(".");
@@ -536,7 +557,7 @@ void setup() {
 
   Serial.println("SPIFFS Initialisierung...");
   if (!SPIFFS.begin()) {
-    Serial.println("SPIFFS nicht formatiert â€“ wird formatiert (bis zu 30 s)...");
+    Serial.println("SPIFFS nicht formatiert �?" wird formatiert (bis zu 30 s)...");
     SPIFFS.format();
     SPIFFS.begin();
   }
@@ -601,20 +622,20 @@ void setup() {
 
 measurementEvent();             // calling function to get all data from the different sensors
 
-  // Zambretti-Berechnung und Druckverlauf werden jetzt server-seitig in der API durchgefÃ¼hrt.
+  // Zambretti-Berechnung und Druckverlauf werden jetzt server-seitig in der API durchgeführt.
 
   #if USE_API
-  if (cfg.api_enabled) sendToAPI();   // Messdaten zusÃ¤tzlich an PHP/MySQL-API senden
+  if (cfg.api_enabled) sendToAPI();   // Messdaten zusätzlich an PHP/MySQL-API senden
 #endif
 
   if (volt < 0.5) {
-    Serial.println("Kein Akku erkannt (USB-Betrieb) â€“ normaler Schlaf.");
+    Serial.println("Kein Akku erkannt (USB-Betrieb) �?" normaler Schlaf.");
     goToSleep(cfg.sleep_min);
   } else if (volt > 3.4) {
     goToSleep(cfg.sleep_min);
   }
   else {
-    goToSleep(0);   // Batterie leer: ESP.deepSleep(0) = permanenter Schlaf, Wake nur per Reset-Pin (RSTâ†’GND)
+    goToSleep(0);   // Batterie leer: ESP.deepSleep(0) = permanenter Schlaf, Wake nur per Reset-Pin (RST�?'GND)
   }
 } // end of void setup()
 
@@ -634,7 +655,7 @@ void measurementEvent() {
 
   Serial.print("Temp BME: ");
   Serial.print(measured_temp_bme);
-  Serial.print("Â°C; Humidity BME: ");
+  Serial.print("°C; Humidity BME: ");
   Serial.print(measured_humi_bme);
   Serial.println("%; ");
 
@@ -691,7 +712,7 @@ void measurementEvent() {
   DewpointTemperature = (b * tempcalc) / (a - tempcalc);
   Serial.print("Dewpoint: ");
   Serial.print(DewpointTemperature);
-  Serial.println("Â°C; ");
+  Serial.println("°C; ");
 
   if (cfg.temp_corr != 0.0f) {
     adjusted_temp = measured_temp + cfg.temp_corr;
@@ -701,7 +722,7 @@ void measurementEvent() {
     if (adjusted_humi > 100) adjusted_humi = 100;
     Serial.print("Temp adjusted: ");
     Serial.print(adjusted_temp);
-    Serial.print("Â°C; ");
+    Serial.print("°C; ");
     Serial.print("Humidity adjusted: ");
     Serial.print(adjusted_humi);
     Serial.print("%; ");
@@ -716,9 +737,9 @@ void measurementEvent() {
   DewPointSpread = adjusted_temp - DewpointTemperature;
   Serial.print("Dewpoint Spread: ");
   Serial.print(DewPointSpread);
-  Serial.println("Â°C; ");
+  Serial.println("°C; ");
 
-  // Heat Index (>26.7Â°C only)
+  // Heat Index (>26.7°C only)
   if (adjusted_temp > 26.7) {
     double c1 = -8.784, c2 = 1.611, c3 = 2.338, c4 = -0.146, c5 = -1.230e-2, c6 = -1.642e-2, c7 = 2.211e-3, c8 = 7.254e-4, c9 = -2.582e-6  ;
     double T = adjusted_temp;
@@ -731,11 +752,11 @@ void measurementEvent() {
   }
   else {
     HeatIndex = adjusted_temp;
-    Serial.println("Not warm enough (less than 26.7 Â°C) for Heatindex");
+    Serial.println("Not warm enough (less than 26.7 °C) for Heatindex");
   }
   Serial.print("HeatIndex: ");
   Serial.print(HeatIndex);
-  Serial.println("Â°C; ");
+  Serial.println("°C; ");
 
   // Pressure state (index into LANG_PRESSURE[])
   if      (rel_pressure_rounded < 990)                                     pressure_idx = PRESS_STORM_LOW;
@@ -775,14 +796,14 @@ static String replaceMarker(const String& src, const char* marker, const char* r
 
 // ZambrettiSays() wurde in die API ausgelagert (api/v1/zambretti.php).
 
-// ReadFromSPIFFS() / WriteToSPIFFS() / FirstTimeRun() wurden entfernt â€“
+// ReadFromSPIFFS() / WriteToSPIFFS() / FirstTimeRun() wurden entfernt �?"
 // Druckverlauf wird jetzt server-seitig in der DB gespeichert.
 
 
 
 #if USE_DS18B20
 float getTemperature() {
-  // Bis zu 3 Versuche â€“ DS18B20 braucht manchmal einen zweiten Anlauf
+  // Bis zu 3 Versuche �?" DS18B20 braucht manchmal einen zweiten Anlauf
   // (typisch bei fehlendem oder zu schwachem Pull-up-Widerstand).
   for (int attempt = 1; attempt <= 3; attempt++) {
     s18d20.requestTemperatures();
@@ -793,14 +814,14 @@ float getTemperature() {
     Serial.print(attempt);
     Serial.print(": ");
     Serial.print(t);
-    Serial.println("Â°C");
+    Serial.println("°C");
 
     if (t > -126.9 && t < 84.9) {   // -127 = kein Sensor, 85.0 = Fehler/Kurzschluss
       return t;
     }
-    if (attempt < 3) delay(200);  // kurz warten vor nÃ¤chstem Versuch
+    if (attempt < 3) delay(200);  // kurz warten vor nächstem Versuch
   }
-  Serial.println("DS18B20 Fehler: alle 3 Versuche fehlgeschlagen! PrÃ¼fe Verkabelung und 4.7kÎ© Pull-up auf D7.");
+  Serial.println("DS18B20 Fehler: alle 3 Versuche fehlgeschlagen! Prüfe Verkabelung und 4.7kΩ Pull-up auf D7.");
   return -88;
 }
 #endif
@@ -808,121 +829,32 @@ float getTemperature() {
 
 
 // =====================================================================
-// Base64-Enkodierung (minimal, fÃ¼r HTTP Basic Auth)
-// Keine externe Bibliothek nÃ¶tig â€“ der ESP8266 Arduino Core enthÃ¤lt
+// Base64-Enkodierung (minimal, für HTTP Basic Auth)
+// Keine externe Bibliothek nötig �?" der ESP8266 Arduino Core enthält
 // keine stdlib-Base64, daher diese schlanke Inline-Implementierung.
-// =====================================================================
-static const char B64_CHARS[] =
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-static String base64Encode(const String& input) {
-  String out;
-  out.reserve(((input.length() + 2) / 3) * 4);
-  int i = 0;
-  const int len = input.length();
-  while (i < len) {
-    uint8_t a = (i < len) ? (uint8_t)input[i++] : 0;
-    uint8_t b = (i < len) ? (uint8_t)input[i++] : 0;
-    uint8_t c = (i < len) ? (uint8_t)input[i++] : 0;
-    out += B64_CHARS[a >> 2];
-    out += B64_CHARS[((a & 3) << 4) | (b >> 4)];
-    out += (i - 2 < len) ? B64_CHARS[((b & 15) << 2) | (c >> 6)] : '=';
-    out += (i - 1 < len) ? B64_CHARS[c & 63] : '=';
-  }
-  return out;
-}
-
-// =====================================================================
-// sendToAPI() â€“ sendet den aktuellen Messdatensatz per HTTP(S) POST
-//               an den konfigurierten REST-Endpunkt.
-//
-// Sicherheitshinweis: API_USE_HTTPS=1 verschlÃ¼sselt die Ãœbertragung,
-// prÃ¼ft aber kein Zertifikat (setInsecure). Das verhindert Lauschangriffe,
-// schÃ¼tzt aber nicht vor MITM. FÃ¼r ein Wetterstation-Szenario ausreichend.
-// Wer Zertifikat-Pinning braucht: client.setFingerprint(SHA1_HEX) nutzen.
-// =====================================================================
 #if USE_API
+// sendToAPI() - sendet Messdaten per HTTP(S) POST via SWSApiClient.
 void sendToAPI() {
-  // JSON-Payload aufbauen
-  JsonDocument jsonDoc;
-  jsonDoc["station_name"]    = cfg.station_name;
-  jsonDoc["temperature"]      = adjusted_temp;          // BME280 Umgebungstemperatur
-  if (pool_temp > -87) {
-    jsonDoc["pool_temperature"] = pool_temp;
-    Serial.print("API: pool_temperature = ");
-    Serial.println(pool_temp);
-  } else {
-    Serial.println("API: pool_temperature fehlt (Sensor-Fehler oder nicht angeschlossen)");
-  }
-  jsonDoc["humidity"]         = adjusted_humi;
-  jsonDoc["dewpoint"]         = DewpointTemperature;
-  jsonDoc["dewpointspread"]   = DewPointSpread;
-  jsonDoc["rel_pressure"]    = rel_pressure_rounded;
-  jsonDoc["abs_pressure"]    = measured_pres;
-  jsonDoc["heatindex"]       = HeatIndex;
-  // Zambretti/Trend/pressurestate werden jetzt server-seitig von der API berechnet.
-  jsonDoc["battery_volt"]    = volt;
-  jsonDoc["battery_pct"]     = batterypercentage;
-  jsonDoc["wifi_strength"]   = (int)WiFi.RSSI();
-  jsonDoc["timestamp"]       = current_timestamp;  // UTC Unix-Timestamp (API erwartet UTC)
-
-  char payload[768];  // Groesse: ~640 Basis + 128 Reserve fuer pool_temperature + station_name
-  size_t written = serializeJson(jsonDoc, payload, sizeof(payload));
-  if (written == 0 || written >= sizeof(payload) - 1) {
-    Serial.println("WARNUNG: JSON-Payload abgeschnitten! Buffer erhoehen.");
-    #if USE_API
-    logToAPI("error", "BUFFER_OVERFLOW", "JSON-Payload wurde abgeschnitten - Buffer zu klein");
-    #endif
-  }
-  Serial.print("API Payload (");
-  Serial.print(written);
-  Serial.print(" Bytes): ");
-  Serial.println(payload);
-
-  // Basic-Auth-Header vorbereiten
-  String credentials = base64Encode(String(cfg.api_user) + ":" + String(cfg.api_pass));
-  String authHeader  = "Basic " + credentials;
-
-  // HTTP-Client aufbauen (Protokoll zur Laufzeit aus cfg.api_https)
-  HTTPClient http;
-  String url;
-
-  if (cfg.api_https) {
-    WiFiClientSecure tlsClient;
-    tlsClient.setInsecure();  // Zertifikat nicht prÃ¼fen (siehe Hinweis oben)
-    url = String("https://") + cfg.api_host + cfg.api_path;
-    http.begin(tlsClient, url);
-  } else {
-    WiFiClient plainClient;
-    url = String("http://") + cfg.api_host + cfg.api_path;
-    http.begin(plainClient, url);
-  }
-
-  http.addHeader("Content-Type", "application/json");
-  http.addHeader("Authorization", authHeader);
-  http.setTimeout(8000);  // 8 Sekunden Timeout
-
-  Serial.print("---> Sende Daten an API: ");
-  Serial.println(url);
-
-  int httpCode = http.POST(payload);
-
-  if (httpCode > 0) {
-    Serial.print("API Antwort HTTP ");
-    Serial.print(httpCode);
-    Serial.print(": ");
-    Serial.println(http.getString());
-  } else {
-    Serial.print("API Fehler: ");
-    Serial.println(http.errorToString(httpCode));
-    #if USE_API
+  if (!apiClient) return;
+  SWSResult result = apiClient
+    ->set("temperature",   adjusted_temp)
+    .set("humidity",       adjusted_humi)
+    .set("dewpoint",       DewpointTemperature)
+    .set("dewpointspread", DewPointSpread)
+    .set("rel_pressure",   rel_pressure_rounded)
+    .set("abs_pressure",   measured_pres)
+    .set("heatindex",      HeatIndex)
+    .set("battery_volt",   volt)
+    .set("battery_pct",    batterypercentage)
+    .set("wifi_strength",  (int)WiFi.RSSI())
+    .set("timestamp",      (int)current_timestamp)
+    .setIfValid("pool_temperature", pool_temp)
+    .send();
+  if (!result.ok) {
     char ctx[48];
-    snprintf(ctx, sizeof(ctx), "{\"http_code\":%d}", httpCode);
-    logToAPI("error", "API_HTTP_ERROR", http.errorToString(httpCode).c_str(), ctx);
-    #endif
+    snprintf(ctx, sizeof(ctx), "{\"http_code\":%d}", result.httpCode);
+    logToAPI("error", "API_HTTP_ERROR", result.response.c_str(), ctx);
   }
-
-  http.end();
 }
 #endif  // USE_API
 
