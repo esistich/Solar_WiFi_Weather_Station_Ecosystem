@@ -1,8 +1,8 @@
-/*----------------------------------------------------------------------------------------------------
+﻿/*----------------------------------------------------------------------------------------------------
   Project Name : Solar Powered WiFi Weather Station V2.7
   Features: temperature, dewpoint, dewpoint spread, heat index, humidity, absolute pressure, relative pressure, battery status and
   the famous Zambretti Forecaster (multi lingual)
-  Authors: Keith Hungerford, Debasish Dutta and Marc Stähli
+  Authors: Keith Hungerford, Debasish Dutta and Marc StÃ¤hli
   Website : www.opengreenenergy.com
 
   Main microcontroller (ESP8266) and BME280 both sleep between measurements
@@ -15,35 +15,35 @@
   Version History (recent):
 
   v2.7 (2025/2026) - API-only Edition
-  - MQTT vollständig entfernt – Station sendet ausschließlich an REST-API
+  - MQTT vollstÃ¤ndig entfernt â€“ Station sendet ausschlieÃŸlich an REST-API
   - Blynk entfernt
   - SHT45 entfernt (nur noch BME280 + DS18B20)
   - Status-LED entfernt
-  - AP-Konfigurations-Portal (Button D6 beim Boot gedrückt halten):
-    - ESP8266 öffnet WLAN-Accesspoint "SWS-Config"
+  - AP-Konfigurations-Portal (Button D6 beim Boot gedrÃ¼ckt halten):
+    - ESP8266 Ã¶ffnet WLAN-Accesspoint "SWS-Config"
     - Webinterface unter 192.168.4.1 (kein Timeout, Neustart nur per Speichern)
     - Einstellungen als JSON im EEPROM (Magic: SWS2)
   - PHP/MySQL-REST-API (api/):
     - data.php   : POST neue Messung / GET letzten Datensatz
     - history.php: GET Historien-Daten (limit, from, to)
     - status.php : Systemstatus
-    - schema.sql : vollständiges Datenbankschema
+    - schema.sql : vollstÃ¤ndiges Datenbankschema
   - sendToAPI(): HTTP/HTTPS, Basic-Auth, Zambretti-Felder eingeschlossen
   - DS18B20 Pooltemperatur auf D7 (GPIO13)
-  - USB-Betrieb erkannt (volt < 0.5 V → normaler Schlaf statt Dauerschlaf)
+  - USB-Betrieb erkannt (volt < 0.5 V â†’ normaler Schlaf statt Dauerschlaf)
 
   v2.6 (April 2026) - Configurable sensors & robustness pass
   - Sensors: BME280 + DS18B20
   - USE_BME280, USE_DS18B20, TEMP_SOURCE konfigurierbar
-  - Bugfixes: getTemperature(), SPIFFS-Fehlerbehandlung, Battery-ADC (16×),
+  - Bugfixes: getTemperature(), SPIFFS-Fehlerbehandlung, Battery-ADC (16Ã—),
     NTP-yield(), Zambretti-Hysterese, ESP.restart() statt resetFunc
 
   Features:
   // 1. WiFi-Verbindung, Messung, Upload an PHP/MySQL-REST-API
-  // 2. Temperatur, Taupunkt, Wärmeindex, Luftfeuchtigkeit, Luftdruck (abs+rel)
+  // 2. Temperatur, Taupunkt, WÃ¤rmeindex, Luftfeuchtigkeit, Luftdruck (abs+rel)
   // 3. Zambretti-Wetterprognose (mehrsprachig)
   // 4. Pooltemperatur (DS18B20)
-  // 5. Batterie-/USB-Statusüberwachung
+  // 5. Batterie-/USB-StatusÃ¼berwachung
   // 6. Deep-Sleep zwischen Messungen
 
   /***************************************************
@@ -97,7 +97,7 @@
 #include "FS.h"
 #include <EasyNTPClient.h>          // https://github.com/aharshac/EasyNTPClient
 #include <TimeLib.h>                // https://github.com/PaulStoffregen/Time.git
-// PubSubClient (MQTT) wurde entfernt – Station arbeitet ausschließlich mit REST-API
+// PubSubClient (MQTT) wurde entfernt â€“ Station arbeitet ausschlieÃŸlich mit REST-API
 
 // =====================================================================
 // Laufzeit-Konfiguration (geladen aus EEPROM, Fallback: CFG_DEFAULT_*)
@@ -120,9 +120,9 @@ struct StationConfig {
   int   sleep_min;
 };
 
-StationConfig cfg;  // globale Instanz – überall im Sketch verwendet
+StationConfig cfg;  // globale Instanz â€“ Ã¼berall im Sketch verwendet
 
-// EEPROM-Magic-Bytes: zeigen an, dass gültige Daten gespeichert sind
+// EEPROM-Magic-Bytes: zeigen an, dass gÃ¼ltige Daten gespeichert sind
 static const uint8_t EEPROM_MAGIC[4] = { 0x53, 0x57, 0x53, 0x32 };  // "SWS2"
 static const int     EEPROM_SIZE     = 2048;
 static const int     EEPROM_DATA_OFFSET = 4;
@@ -145,18 +145,18 @@ static void applyDefaults() {
 }
 
 void loadConfig() {
-  // Erst Defaults setzen, dann ggf. mit EEPROM-Werten überschreiben
+  // Erst Defaults setzen, dann ggf. mit EEPROM-Werten Ã¼berschreiben
   applyDefaults();
 
   EEPROM.begin(EEPROM_SIZE);
 
-  // Magic-Bytes prüfen
+  // Magic-Bytes prÃ¼fen
   bool valid = true;
   for (int i = 0; i < 4; i++) {
     if (EEPROM.read(i) != EEPROM_MAGIC[i]) { valid = false; break; }
   }
   if (!valid) {
-    Serial.println("EEPROM leer/ungültig – verwende Compile-Zeit-Defaults.");
+    Serial.println("EEPROM leer/ungÃ¼ltig â€“ verwende Compile-Zeit-Defaults.");
     return;
   }
 
@@ -167,11 +167,11 @@ void loadConfig() {
   }
   JsonDocument doc;
   if (deserializeJson(doc, buf) != DeserializationError::Ok) {
-    Serial.println("EEPROM-JSON ungültig – verwende Compile-Zeit-Defaults.");
+    Serial.println("EEPROM-JSON ungÃ¼ltig â€“ verwende Compile-Zeit-Defaults.");
     return;
   }
 
-  // Nur vorhandene EEPROM-Felder überschreiben; fehlende behalten den Default
+  // Nur vorhandene EEPROM-Felder Ã¼berschreiben; fehlende behalten den Default
   if (doc["station_name"].is<const char*>())     strlcpy(cfg.station_name,     doc["station_name"],     sizeof(cfg.station_name));
   if (doc["wifi_ssid"].is<const char*>())        strlcpy(cfg.wifi_ssid,        doc["wifi_ssid"],        sizeof(cfg.wifi_ssid));
   if (doc["wifi_pass"].is<const char*>())        strlcpy(cfg.wifi_pass,        doc["wifi_pass"],        sizeof(cfg.wifi_pass));
@@ -220,7 +220,7 @@ void saveConfig() {
 
 #if USE_DS18B20
   #define ONE_WIRE_BUS 13            // Data wire 18d20 Sensor is plugged into port D7 @ ESP8266
-  #define DS18B20_RESOLUTION 12      // 12-bit -> 0.0625°C, conversion ~750ms
+  #define DS18B20_RESOLUTION 12      // 12-bit -> 0.0625Â°C, conversion ~750ms
 #endif
 
 Adafruit_BME280 bme;                // I2C
@@ -235,7 +235,7 @@ EasyNTPClient ntpClient(udp, NTP_SERVER, 0);  // reading UTC
 
 //varialbes of measured or calculated sensor data
 #if USE_DS18B20
-  float measured_temp_dal;
+  float measured_temp_dal = -88.0f;  // -88 = Sentinel: kein Wert / Sensor-Fehler
 #endif
 float measured_temp_bme;
 float measured_temp;
@@ -246,7 +246,7 @@ float adjusted_humi;
 float pool_temp = -88;  // DS18B20 Pooltemperatur (-88 = kein Sensor / Fehler)
 float measured_pres;
 float SLpressure_hPa;               // needed for rel pressure calculation
-float HeatIndex;                    // Heat Index in °C
+float HeatIndex;                    // Heat Index in Â°C
 float volt;
 int batterypercentage;
 int rel_pressure_rounded;
@@ -256,8 +256,7 @@ float DewPointSpread;               // Difference between actual temperature and
 //variables for trend calculation
 unsigned long current_timestamp;    // UTC-Timestamp von NTP (Sekunden seit 1.1.1970)
 unsigned long saved_timestamp;      // Timestamp stored in SPIFFS
-float pressure_value[12];           // Array for the historical pressure values (6 hours, all 30 mins), where as pressure_value[0] is always the most recent value
-float pressure_difference[12];      // Array to calculate trend with pressure differences
+// Druckverlauf und Zambretti werden jetzt server-seitig in der API berechnet.
 
 // =====================================================================
 //  Europaeische Sommerzeit (CET/CEST) auf Basis von UTC-Epoch
@@ -300,38 +299,14 @@ static unsigned long localTimestamp(unsigned long utcEpoch) {
     return utcEpoch + (isCEST(utcEpoch) ? 7200UL : 3600UL);
 }
 
-// variables for forcasting result
-int accuracy;                       // Counter, if enough values for accurate forecasting
-String ZambrettisWords;             // Final statement about weather forecast (after {P}/{E} substitution)
-char z_letter;
-int trend_idx;                      // Index into LANG_TRENDS[] (0..6)
-int pressure_idx;                   // Index into LANG_PRESSURE[] (0..4)
-// (Convenience accessors below for readability and serial debug output.)
-inline const char* trend_in_words()    { return LANG_TRENDS[trend_idx]; }
-inline const char* pressure_in_words() { return LANG_PRESSURE[pressure_idx]; }
-
-// Trend index
-#define TREND_RISING_FAST   0
-#define TREND_RISING        1
-#define TREND_RISING_SLOW   2
-#define TREND_STEADY        3
-#define TREND_FALLING_SLOW  4
-#define TREND_FALLING       5
-#define TREND_FALLING_FAST  6
-
-// Pressure-state index constants (used with LANG_PRESSURE[])
-#define PRESS_STORM_LOW     0
-#define PRESS_STRONG_LOW    1
-#define PRESS_LOW           2
-#define PRESS_HIGH          3
-#define PRESS_STRONG_HIGH   4
+// Zambretti- und Druckzustands-Logik wurde in die API ausgelagert (api/v1/zambretti.php).
 
 
 
 // =====================================================================
 // Konfigurations-Portal
 // Gestartet wenn CONFIG_BUTTON_PIN beim Aufwachen LOW ist.
-// Der ESP öffnet einen Access Point (SSID: SWS-Config) und stellt
+// Der ESP Ã¶ffnet einen Access Point (SSID: SWS-Config) und stellt
 // unter http://192.168.4.1 ein HTML-Formular bereit.
 // Nach dem Speichern startet der ESP automatisch neu (kein Timeout).
 // =====================================================================
@@ -347,7 +322,7 @@ void startConfigPortal() {
   WiFi.mode(WIFI_AP);
   delay(100);
   bool apOk = WiFi.softAP(CONFIG_AP_SSID);   // kein Passwort = offener AP
-  delay(500);   // AP braucht ~300–500 ms bis er sichtbar ist
+  delay(500);   // AP braucht ~300â€“500 ms bis er sichtbar ist
 
   if (!apOk) {
     Serial.println("FEHLER: softAP() fehlgeschlagen! Neustart...");
@@ -419,8 +394,8 @@ void startConfigPortal() {
     html += field("Passwort", "api_pass", cfg.api_pass, 32);
 
     html += "</table><h2>Sonstiges</h2><table>";
-    html += fieldFloat("Temp-Korrektur (°C)", "temp_corr", cfg.temp_corr);
-    html += fieldInt("Höhe ü. NN (m)", "elevation", cfg.elevation);
+    html += fieldFloat("Temp-Korrektur (Â°C)", "temp_corr", cfg.temp_corr);
+    html += fieldInt("HÃ¶he Ã¼. NN (m)", "elevation", cfg.elevation);
     html += fieldInt("Schlafzeit (min)", "sleep_min", cfg.sleep_min);
 
     html += R"(</table>
@@ -466,14 +441,14 @@ void startConfigPortal() {
 
   server.begin();
 
-  Serial.println("Warte auf Konfiguration (kein Timeout – Neustart erfolgt nach dem Speichern)...");
+  Serial.println("Warte auf Konfiguration (kein Timeout â€“ Neustart erfolgt nach dem Speichern)...");
 
   while (true) {
     server.handleClient();
     yield();
   }
-  // Kein Timeout: Das Portal läuft bis der Nutzer speichert (/save → ESP.restart())
-  // oder einen Hardware-Reset auslöst.
+  // Kein Timeout: Das Portal lÃ¤uft bis der Nutzer speichert (/save â†’ ESP.restart())
+  // oder einen Hardware-Reset auslÃ¶st.
 }
 
 void setup() {
@@ -485,11 +460,11 @@ void setup() {
   // Konfiguration aus EEPROM laden (oder Defaults verwenden)
   loadConfig();
 
-  // Konfigurations-Portal prüfen: Button (CONFIG_BUTTON_PIN) beim Start LOW?
+  // Konfigurations-Portal prÃ¼fen: Button (CONFIG_BUTTON_PIN) beim Start LOW?
   pinMode(CONFIG_BUTTON_PIN, INPUT_PULLUP);
   delay(10);
   if (digitalRead(CONFIG_BUTTON_PIN) == LOW) {
-    startConfigPortal();   // kehrt nicht zurück (Neustart am Ende)
+    startConfigPortal();   // kehrt nicht zurÃ¼ck (Neustart am Ende)
   }
 
   Serial.print("Start of ");
@@ -552,7 +527,7 @@ void setup() {
         goToSleep(10);   // go to sleep and retry after 10 min
       }
       else {
-        goToSleep(0);   // Batterie leer: ESP.deepSleep(0) = permanenter Schlaf, Wake nur per Reset-Pin (RST→GND)
+        goToSleep(0);   // Batterie leer: ESP.deepSleep(0) = permanenter Schlaf, Wake nur per Reset-Pin (RSTâ†’GND)
       }
     }
     Serial.print(".");
@@ -561,7 +536,7 @@ void setup() {
 
   Serial.println("SPIFFS Initialisierung...");
   if (!SPIFFS.begin()) {
-    Serial.println("SPIFFS nicht formatiert – wird formatiert (bis zu 30 s)...");
+    Serial.println("SPIFFS nicht formatiert â€“ wird formatiert (bis zu 30 s)...");
     SPIFFS.format();
     SPIFFS.begin();
   }
@@ -626,67 +601,20 @@ void setup() {
 
 measurementEvent();             // calling function to get all data from the different sensors
 
-  ReadFromSPIFFS();
-
-  Serial.print("Timestamp difference: ");
-  Serial.println(current_timestamp - saved_timestamp);
-
-  if (current_timestamp - saved_timestamp > 21600) {     // last save older than 6 hours -> re-initialize values
-    FirstTimeRun();
-  }
-  else if (current_timestamp - saved_timestamp > 1700) { // it is time for pressure update (1800 sec = 30 min)
-
-    for (int i = 11; i >= 1; i = i - 1) {
-      pressure_value[i] = pressure_value[i - 1];        // shifting values one to the right
-    }
-
-    pressure_value[0] = rel_pressure_rounded;           // updating with acutal rel pressure (newest value)
-
-    if (accuracy < 12) {
-      accuracy = accuracy + 1;
-    }
-
-    WriteToSPIFFS(current_timestamp);
-  }
-
-  //**************************Calculate Zambretti Forecast*******************************************
-
-  int accuracy_in_percent = accuracy * 94 / 12;        // 94% is the max predicion accuracy of Zambretti
-  if ( volt > 3.4 ) {
-    ZambrettisWords = ZambrettiSays(char(ZambrettiLetter()));
-  }
-  else {
-    ZambrettisWords = ZambrettiSays('0');   // send Message that battery is empty
-  }
-
-  Serial.println("********************************************************");
-  Serial.print("Zambretti says: ");
-  Serial.print(ZambrettisWords);
-  Serial.print(", ");
-  Serial.println(trend_in_words());
-  Serial.print("Prediction accuracy: ");
-  Serial.print(accuracy_in_percent);
-  Serial.println("%");
-  if (accuracy < 12) {
-    Serial.println("Reason: Not enough weather data yet.");
-    Serial.print("We need ");
-    Serial.print((12 - accuracy) / 2);
-    Serial.println(" hours more to get sufficient data.");
-  }
-  Serial.println("********************************************************");
+  // Zambretti-Berechnung und Druckverlauf werden jetzt server-seitig in der API durchgefÃ¼hrt.
 
   #if USE_API
-  if (cfg.api_enabled) sendToAPI();   // Messdaten zusätzlich an PHP/MySQL-API senden
+  if (cfg.api_enabled) sendToAPI();   // Messdaten zusÃ¤tzlich an PHP/MySQL-API senden
 #endif
 
   if (volt < 0.5) {
-    Serial.println("Kein Akku erkannt (USB-Betrieb) – normaler Schlaf.");
+    Serial.println("Kein Akku erkannt (USB-Betrieb) â€“ normaler Schlaf.");
     goToSleep(cfg.sleep_min);
   } else if (volt > 3.4) {
     goToSleep(cfg.sleep_min);
   }
   else {
-    goToSleep(0);   // Batterie leer: ESP.deepSleep(0) = permanenter Schlaf, Wake nur per Reset-Pin (RST→GND)
+    goToSleep(0);   // Batterie leer: ESP.deepSleep(0) = permanenter Schlaf, Wake nur per Reset-Pin (RSTâ†’GND)
   }
 } // end of void setup()
 
@@ -706,24 +634,35 @@ void measurementEvent() {
 
   Serial.print("Temp BME: ");
   Serial.print(measured_temp_bme);
-  Serial.print("°C; Humidity BME: ");
+  Serial.print("Â°C; Humidity BME: ");
   Serial.print(measured_humi_bme);
   Serial.println("%; ");
 
 #if USE_DS18B20
   // ----- DS18B20 als Poolsensor -----
   measured_temp_dal = getTemperature();
-  pool_temp = measured_temp_dal;  // Pooltemperatur separat speichern
-  Serial.print("Pool-Temp (DS18B20): ");
-  Serial.print(pool_temp);
-  Serial.println("°C; ");
+  if (measured_temp_dal > -87.0f) {
+    pool_temp = measured_temp_dal;  // Gueltigen Wert uebernehmen
+    Serial.print("Pool-Temp (DS18B20): ");
+    Serial.print(pool_temp);
+    Serial.println("C; ");
+  } else {
+    // Sensor nicht verfuegbar oder Fehler - pool_temp bleibt auf Sentinel-Wert -88
+    Serial.println("DS18B20: Ungueltiger Wert - pool_temp nicht aktualisiert.");
+  }
 #endif
 
   // ----- Selection of canonical values per Settings26.h -----
 #if   TEMP_SOURCE == SRC_BME
   measured_temp = measured_temp_bme;
 #elif TEMP_SOURCE == SRC_DAL
-  measured_temp = measured_temp_dal;
+  // Fallback auf BME280 wenn DS18B20 einen Fehler gemeldet hat (-88)
+  if (measured_temp_dal > -87.0f) {
+    measured_temp = measured_temp_dal;
+  } else {
+    measured_temp = measured_temp_bme;
+    Serial.println("WARNUNG: DS18B20 fehlgeschlagen - verwende BME280 als Temperatur-Fallback.");
+  }
 #endif
 
   measured_humi = measured_humi_bme;
@@ -746,7 +685,7 @@ void measurementEvent() {
   DewpointTemperature = (b * tempcalc) / (a - tempcalc);
   Serial.print("Dewpoint: ");
   Serial.print(DewpointTemperature);
-  Serial.println("°C; ");
+  Serial.println("Â°C; ");
 
   if (cfg.temp_corr != 0.0f) {
     adjusted_temp = measured_temp + cfg.temp_corr;
@@ -756,7 +695,7 @@ void measurementEvent() {
     if (adjusted_humi > 100) adjusted_humi = 100;
     Serial.print("Temp adjusted: ");
     Serial.print(adjusted_temp);
-    Serial.print("°C; ");
+    Serial.print("Â°C; ");
     Serial.print("Humidity adjusted: ");
     Serial.print(adjusted_humi);
     Serial.print("%; ");
@@ -771,9 +710,9 @@ void measurementEvent() {
   DewPointSpread = adjusted_temp - DewpointTemperature;
   Serial.print("Dewpoint Spread: ");
   Serial.print(DewPointSpread);
-  Serial.println("°C; ");
+  Serial.println("Â°C; ");
 
-  // Heat Index (>26.7°C only)
+  // Heat Index (>26.7Â°C only)
   if (adjusted_temp > 26.7) {
     double c1 = -8.784, c2 = 1.611, c3 = 2.338, c4 = -0.146, c5 = -1.230e-2, c6 = -1.642e-2, c7 = 2.211e-3, c8 = 7.254e-4, c9 = -2.582e-6  ;
     double T = adjusted_temp;
@@ -786,11 +725,11 @@ void measurementEvent() {
   }
   else {
     HeatIndex = adjusted_temp;
-    Serial.println("Not warm enough (less than 26.7 °C) for Heatindex");
+    Serial.println("Not warm enough (less than 26.7 Â°C) for Heatindex");
   }
   Serial.print("HeatIndex: ");
   Serial.print(HeatIndex);
-  Serial.println("°C; ");
+  Serial.println("Â°C; ");
 
   // Pressure state (index into LANG_PRESSURE[])
   if      (rel_pressure_rounded < 990)                                     pressure_idx = PRESS_STORM_LOW;
@@ -804,152 +743,9 @@ void measurementEvent() {
 
 } // end of void measurementEvent()
 
-int CalculateTrend() {
-  int trend;                                    // -1 falling; 0 steady; 1 raising
-  Serial.println("---> Calculating trend");
+// CalculateTrend() und ZambrettiLetter() wurden in die API ausgelagert (api/v1/zambretti.php).
 
-  //--> giving the most recent pressure reads more weight
-  pressure_difference[0]  = (pressure_value[0] - pressure_value[1])   * 1.5;
-  pressure_difference[1]  = (pressure_value[0] - pressure_value[2]);
-  pressure_difference[2]  = (pressure_value[0] - pressure_value[3])   / 1.5;
-  pressure_difference[3]  = (pressure_value[0] - pressure_value[4])   / 2;
-  pressure_difference[4]  = (pressure_value[0] - pressure_value[5])   / 2.5;
-  pressure_difference[5]  = (pressure_value[0] - pressure_value[6])   / 3;
-  pressure_difference[6]  = (pressure_value[0] - pressure_value[7])   / 3.5;
-  pressure_difference[7]  = (pressure_value[0] - pressure_value[8])   / 4;
-  pressure_difference[8]  = (pressure_value[0] - pressure_value[9])   / 4.5;
-  pressure_difference[9]  = (pressure_value[0] - pressure_value[10])  / 5;
-  pressure_difference[10] = (pressure_value[0] - pressure_value[11])  / 5.5;
-
-  //--> calculating the average and storing it into [11]
-  pressure_difference[11] = (  pressure_difference[0]
-                               + pressure_difference[1]
-                               + pressure_difference[2]
-                               + pressure_difference[3]
-                               + pressure_difference[4]
-                               + pressure_difference[5]
-                               + pressure_difference[6]
-                               + pressure_difference[7]
-                               + pressure_difference[8]
-                               + pressure_difference[9]
-                               + pressure_difference[10]) / 11;
-
-  Serial.print("Current trend: ");
-  Serial.println(pressure_difference[11]);
-
-  if      (pressure_difference[11] >  3.5) {
-    trend_idx = TREND_RISING_FAST;
-    trend = 1;
-  }
-  else if (pressure_difference[11] >  1.5  && pressure_difference[11] <=  3.5)  {
-    trend_idx = TREND_RISING;
-    trend = 1;
-  }
-  else if (pressure_difference[11] >  0.25 && pressure_difference[11] <=  1.5)  {
-    trend_idx = TREND_RISING_SLOW;
-    trend = 1;
-  }
-  else if (pressure_difference[11] > -0.25 && pressure_difference[11] <   0.25) {
-    trend_idx = TREND_STEADY;
-    trend = 0;
-  }
-  else if (pressure_difference[11] >= -1.5 && pressure_difference[11] <  -0.25) {
-    trend_idx = TREND_FALLING_SLOW;
-    trend = -1;
-  }
-  else if (pressure_difference[11] >= -3.5 && pressure_difference[11] <  -1.5)  {
-    trend_idx = TREND_FALLING;
-    trend = -1;
-  }
-  else /* pressure_difference[11] <= -3.5 */ {
-    trend_idx = TREND_FALLING_FAST;
-    trend = -1;
-  }
-
-  Serial.println(trend_in_words());
-  return trend;
-}
-
-char ZambrettiLetter() {
-  Serial.println("---> Calculating Zambretti letter");
-  int z_trend = CalculateTrend();
-  // Case trend is falling
-  if (z_trend == -1) {
-    float zambretti = 0.0009746 * rel_pressure_rounded * rel_pressure_rounded - 2.1068 * rel_pressure_rounded + 1138.7019;
-    //A Winter falling generally results in a Z value lower by 1 unit
-    if (month(current_timestamp) < 4 || month(current_timestamp) > 9) zambretti = zambretti + 1;
-    if (zambretti > 9) zambretti = 9;
-    Serial.print("Calculated and rounded Zambretti in numbers: ");
-    Serial.println(round(zambretti));
-    switch (int(round(zambretti))) {
-      case 0:  z_letter = 'A'; break;       //Settled Fine
-      case 1:  z_letter = 'A'; break;       //Settled Fine
-      case 2:  z_letter = 'B'; break;       //Fine Weather
-      case 3:  z_letter = 'D'; break;       //Fine Becoming Less Settled
-      case 4:  z_letter = 'H'; break;       //Fairly Fine Showers Later
-      case 5:  z_letter = 'O'; break;       //Showery Becoming unsettled
-      case 6:  z_letter = 'R'; break;       //Unsettled, Rain later
-      case 7:  z_letter = 'U'; break;       //Rain at times, worse later
-      case 8:  z_letter = 'V'; break;       //Rain at times, becoming very unsettled
-      case 9:  z_letter = 'X'; break;       //Very Unsettled, Rain
-      default: z_letter = 'A'; break;       //defensive default (FIX v2.6)
-    }
-  }
-  // Case trend is steady
-  if (z_trend == 0) {
-    float zambretti = 138.24 - 0.133 * rel_pressure_rounded;
-    Serial.print("Calculated and rounded Zambretti in numbers: ");
-    Serial.println(round(zambretti));
-    switch (int(round(zambretti))) {
-      case 0:  z_letter = 'A'; break;       //Settled Fine
-      case 1:  z_letter = 'A'; break;       //Settled Fine
-      case 2:  z_letter = 'B'; break;       //Fine Weather
-      case 3:  z_letter = 'E'; break;       //Fine, Possibly showers
-      case 4:  z_letter = 'K'; break;       //Fairly Fine, Showers likely
-      case 5:  z_letter = 'N'; break;       //Showery Bright Intervals
-      case 6:  z_letter = 'P'; break;       //Changeable some rain
-      case 7:  z_letter = 'S'; break;       //Unsettled, rain at times
-      case 8:  z_letter = 'W'; break;       //Rain at Frequent Intervals
-      case 9:  z_letter = 'X'; break;       //Very Unsettled, Rain
-      case 10: z_letter = 'Z'; break;       //Stormy, much rain
-      default: z_letter = 'A'; break;       //defensive default (FIX v2.6)
-    }
-  }
-  // Case trend is rising
-  if (z_trend == 1) {
-    float zambretti = 142.57 - 0.1376 * rel_pressure_rounded;
-    //A Summer rising, improves the prospects by 1 unit over a Winter rising
-    if (month(current_timestamp) >= 4 && month(current_timestamp) <= 9) zambretti = zambretti - 1;
-    if (zambretti < 0) zambretti = 0;
-    Serial.print("Calculated and rounded Zambretti in numbers: ");
-    Serial.println(round(zambretti));
-    switch (int(round(zambretti))) {
-      case 0:  z_letter = 'A'; break;       //Settled Fine
-      case 1:  z_letter = 'A'; break;       //Settled Fine
-      case 2:  z_letter = 'B'; break;       //Fine Weather
-      case 3:  z_letter = 'C'; break;       //Becoming Fine
-      case 4:  z_letter = 'F'; break;       //Fairly Fine, Improving
-      case 5:  z_letter = 'G'; break;       //Fairly Fine, Possibly showers, early
-      case 6:  z_letter = 'I'; break;       //Showery Early, Improving
-      case 7:  z_letter = 'J'; break;       //Changeable, Improving
-      case 8:  z_letter = 'L'; break;       //Rather Unsettled Clearing Later
-      case 9:  z_letter = 'M'; break;       //Unsettled, Probably Improving
-      case 10: z_letter = 'Q'; break;       //Unsettled, short fine Intervals
-      case 11: z_letter = 'T'; break;       //Very Unsettled, Finer at times
-      case 12: z_letter = 'Y'; break;       //Stormy, possibly improving
-      case 13: z_letter = 'Z'; break;       //Stormy, much rain  (FIX v2.6: removed double semicolon)
-      default: z_letter = 'A'; break;       //defensive default (FIX v2.6)
-    }
-  }
-  Serial.print("This is Zambretti's famous letter: ");
-  Serial.println(z_letter);
-  return z_letter;
-}
-
-// ----- Seasonal precipitation word selection with hysteresis -----
-// Returns true while we're in winter mode (snow), false otherwise (rain).
-// Uses static state so the threshold can be crossed without flapping
-// between summer and winter when the temperature hovers near 2°C.
+  // ----- Seasonal precipitation word selection with hysteresis -----
 bool isWinterMode() {
   static bool winter = false;
   if (winter && measured_temp > WINTER_THRESHOLD_HIGH) winter = false;
@@ -971,118 +767,16 @@ static String replaceMarker(const String& src, const char* marker, const char* r
   return result;
 }
 
-String ZambrettiSays(char code) {
-  // Map the Zambretti char to an array index:
-  //   'A'..'Z' -> 0..25
-  //   '0'      -> 26  (low battery message)
-  //   anything else -> default fallback string
-  int idx;
-  if (code >= 'A' && code <= 'Z')      idx = code - 'A';
-  else if (code == '0')                 idx = 26;
-  else                                  return String(LANG_FORECAST_DEFAULT);
+// ZambrettiSays() wurde in die API ausgelagert (api/v1/zambretti.php).
 
-  // Determine the precipitation words for the current season
-  bool winter = isWinterMode();
-  const char* precip_p = winter ? LANG_PRECIP_P_WINTER : LANG_PRECIP_P_SUMMER;
-  const char* precip_e = winter ? LANG_PRECIP_E_WINTER : LANG_PRECIP_E_SUMMER;
-
-  // Look up the template and substitute the markers
-  String result(LANG_ZAMBRETTI[idx]);
-  if (result.indexOf("{P}") >= 0) result = replaceMarker(result, "{P}", precip_p);
-  if (result.indexOf("{E}") >= 0) result = replaceMarker(result, "{E}", precip_e);
-  return result;
-}
-
-void ReadFromSPIFFS() {
-  char filename [] = "/data.txt";
-  File myDataFile = SPIFFS.open(filename, "r");       // Open file for reading
-  if (!myDataFile) {
-    Serial.println("Failed to open file");
-    FirstTimeRun();                                   // no file there -> initializing
-  }
-
-  Serial.println("---> Now reading from SPIFFS");
-
-  String temp_data;
-
-  temp_data = myDataFile.readStringUntil('\n');
-  saved_timestamp = temp_data.toInt();
-  Serial.print("Timestamp from SPIFFS: ");  Serial.println(saved_timestamp);
-
-  temp_data = myDataFile.readStringUntil('\n');
-  accuracy = temp_data.toInt();
-  Serial.print("Accuracy value read from SPIFFS: ");  Serial.println(accuracy);
-
-  Serial.print("Last 12 saved pressure values: ");
-  for (int i = 0; i <= 11; i++) {
-    temp_data = myDataFile.readStringUntil('\n');
-    pressure_value[i] = temp_data.toFloat();
-    Serial.print(pressure_value[i]);
-    Serial.print("; ");
-  }
-  myDataFile.close();
-  Serial.println();
-}
-
-void WriteToSPIFFS(int write_timestamp) {
-  char filename [] = "/data.txt";
-  File myDataFile = SPIFFS.open(filename, "w");        // Open file for writing (appending)
-  if (!myDataFile) {
-    Serial.println("Failed to open file");
-  }
-
-  Serial.println("---> Now writing to SPIFFS");
-
-  myDataFile.println(write_timestamp);                 // Saving timestamp to /data.txt
-  myDataFile.println(accuracy);                        // Saving accuracy value to /data.txt
-
-  for ( int i = 0; i <= 11; i++) {
-    myDataFile.println(pressure_value[i]);             // Filling pressure array with updated values
-  }
-  myDataFile.close();
-
-  Serial.println("File written. Now reading file again.");
-  myDataFile = SPIFFS.open(filename, "r");             // Open file for reading
-  Serial.print("Found in /data.txt = ");
-  while (myDataFile.available()) {
-    Serial.print(myDataFile.readStringUntil('\n'));
-    Serial.print("; ");
-  }
-  Serial.println();
-  myDataFile.close();
-}
-
-void FirstTimeRun() {
-  Serial.println("Doing a first time run");
-  accuracy = 1;
-  for (int b = 0; b < 12; b++) {
-    pressure_value[b] = rel_pressure_rounded;               // Filling pressure array with current pressure
-  }
-  Serial.println("---> Initialisiere SPIFFS-Druckverlauf.");
-
-  char filename [] = "/data.txt";
-  File myDataFile = SPIFFS.open(filename, "w");
-  if (!myDataFile) {
-    Serial.println("SPIFFS: Datei konnte nicht geöffnet werden – prüfe Flash-Größe.");
-    goToSleep(60);
-    return;
-  }
-  myDataFile.println(current_timestamp);
-  myDataFile.println(accuracy);
-  for (int i = 0; i < 12; i++) {
-    myDataFile.println(rel_pressure_rounded);
-  }
-  Serial.println("** Druckverlauf initialisiert. **");
-  myDataFile.close();
-  Serial.println("---> Neustart.");
-  ESP.restart();
-}
+// ReadFromSPIFFS() / WriteToSPIFFS() / FirstTimeRun() wurden entfernt â€“
+// Druckverlauf wird jetzt server-seitig in der DB gespeichert.
 
 
 
 #if USE_DS18B20
 float getTemperature() {
-  // Bis zu 3 Versuche – DS18B20 braucht manchmal einen zweiten Anlauf
+  // Bis zu 3 Versuche â€“ DS18B20 braucht manchmal einen zweiten Anlauf
   // (typisch bei fehlendem oder zu schwachem Pull-up-Widerstand).
   for (int attempt = 1; attempt <= 3; attempt++) {
     s18d20.requestTemperatures();
@@ -1093,14 +787,14 @@ float getTemperature() {
     Serial.print(attempt);
     Serial.print(": ");
     Serial.print(t);
-    Serial.println("°C");
+    Serial.println("Â°C");
 
     if (t > -126.9 && t < 84.9) {   // -127 = kein Sensor, 85.0 = Fehler/Kurzschluss
       return t;
     }
-    if (attempt < 3) delay(200);  // kurz warten vor nächstem Versuch
+    if (attempt < 3) delay(200);  // kurz warten vor nÃ¤chstem Versuch
   }
-  Serial.println("DS18B20 Fehler: alle 3 Versuche fehlgeschlagen! Prüfe Verkabelung und 4.7kΩ Pull-up auf D7.");
+  Serial.println("DS18B20 Fehler: alle 3 Versuche fehlgeschlagen! PrÃ¼fe Verkabelung und 4.7kÎ© Pull-up auf D7.");
   return -88;
 }
 #endif
@@ -1108,8 +802,8 @@ float getTemperature() {
 
 
 // =====================================================================
-// Base64-Enkodierung (minimal, für HTTP Basic Auth)
-// Keine externe Bibliothek nötig – der ESP8266 Arduino Core enthält
+// Base64-Enkodierung (minimal, fÃ¼r HTTP Basic Auth)
+// Keine externe Bibliothek nÃ¶tig â€“ der ESP8266 Arduino Core enthÃ¤lt
 // keine stdlib-Base64, daher diese schlanke Inline-Implementierung.
 // =====================================================================
 static const char B64_CHARS[] =
@@ -1133,12 +827,12 @@ static String base64Encode(const String& input) {
 }
 
 // =====================================================================
-// sendToAPI() – sendet den aktuellen Messdatensatz per HTTP(S) POST
+// sendToAPI() â€“ sendet den aktuellen Messdatensatz per HTTP(S) POST
 //               an den konfigurierten REST-Endpunkt.
 //
-// Sicherheitshinweis: API_USE_HTTPS=1 verschlüsselt die Übertragung,
-// prüft aber kein Zertifikat (setInsecure). Das verhindert Lauschangriffe,
-// schützt aber nicht vor MITM. Für ein Wetterstation-Szenario ausreichend.
+// Sicherheitshinweis: API_USE_HTTPS=1 verschlÃ¼sselt die Ãœbertragung,
+// prÃ¼ft aber kein Zertifikat (setInsecure). Das verhindert Lauschangriffe,
+// schÃ¼tzt aber nicht vor MITM. FÃ¼r ein Wetterstation-Szenario ausreichend.
 // Wer Zertifikat-Pinning braucht: client.setFingerprint(SHA1_HEX) nutzen.
 // =====================================================================
 #if USE_API
@@ -1159,13 +853,8 @@ void sendToAPI() {
   jsonDoc["dewpointspread"]   = DewPointSpread;
   jsonDoc["relativepressure"]= rel_pressure_rounded;
   jsonDoc["absolutepressure"]= measured_pres;
-  jsonDoc["pressurestate"]   = pressure_in_words();
   jsonDoc["heatindex"]       = HeatIndex;
-  jsonDoc["zambrettisays"]   = ZambrettisWords;
-  jsonDoc["zletter"]         = String(z_letter);
-  jsonDoc["trendinwords"]    = trend_in_words();
-  jsonDoc["trend"]           = pressure_difference[11];
-  jsonDoc["accuracy"]        = (int)(accuracy * 94 / 12);
+  // Zambretti/Trend/pressurestate werden jetzt server-seitig von der API berechnet.
   jsonDoc["battery"]         = volt;
   jsonDoc["batterypercentage"]= batterypercentage;
   jsonDoc["wifi_strength"]   = (int)WiFi.RSSI();
@@ -1184,7 +873,7 @@ void sendToAPI() {
 
   if (cfg.api_https) {
     WiFiClientSecure tlsClient;
-    tlsClient.setInsecure();  // Zertifikat nicht prüfen (siehe Hinweis oben)
+    tlsClient.setInsecure();  // Zertifikat nicht prÃ¼fen (siehe Hinweis oben)
     url = String("https://") + cfg.api_host + cfg.api_path;
     http.begin(tlsClient, url);
   } else {

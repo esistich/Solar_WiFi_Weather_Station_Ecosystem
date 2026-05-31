@@ -48,6 +48,7 @@ $routes = [
 	'POST /data'           => __DIR__ . '/data.php',
 	'GET /history'         => __DIR__ . '/history.php',
 	'GET /status'          => __DIR__ . '/status.php',
+	'GET /zambretti'       => __DIR__ . '/zambretti.php',
 	'GET /stations'        => __DIR__ . '/stations.php',
 	'POST /auth/register'  => __DIR__ . '/auth/register.php',
 	'POST /auth/login'     => __DIR__ . '/auth/login.php',

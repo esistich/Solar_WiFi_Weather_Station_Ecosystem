@@ -19,6 +19,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/zambretti.php';
+
 $db = getDb();
 
 // ── GET: letzter Messdatensatz ────────────────────────────────────────────────
@@ -90,8 +92,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	$stmt->execute([$station['id'], $deviceTs]);
 	$measId = (int)$db->lastInsertId();
 
-	// Reservierte Keys die keine Metriken sind
-	$skip = ['station_slug', 'station_name', 'device_ts'];
+	// Reservierte Keys die keine Metriken sind, plus Felder die die API jetzt selbst berechnet
+	$skip = [
+		'station_slug', 'station_name', 'device_ts',
+		// Folgende Felder wurden frueher vom Sketch gesendet, werden jetzt
+		// von calculateAndStoreZambretti() in der API berechnet:
+		'zambrettisays', 'zletter', 'trendinwords', 'accuracy',
+		'pressurestate', 'pressure_state',
+	];
 
 	// Alle übrigen Felder als Metriken speichern
 	$stmtVal  = $db->prepare('INSERT INTO measurement_values (measurement_id, metric_key, value) VALUES (?, ?, ?)');
@@ -132,6 +140,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 		} catch (Throwable $e) {
 			$errors[] = "val[$key]: " . $e->getMessage();
 		}
+	}
+
+	// Zambretti-Vorhersage server-seitig berechnen und in measurement_values schreiben
+	$deviceTsForZambretti = $deviceTs ?? time();
+	try {
+		calculateAndStoreZambretti($db, (int)$station['id'], $measId, $deviceTsForZambretti);
+	} catch (Throwable $e) {
+		$errors[] = 'zambretti: ' . $e->getMessage();
 	}
 
 	sendJson(200, ['ok' => true, 'measurement_id' => $measId, 'station' => $station['slug'], 'errors' => $errors]);
