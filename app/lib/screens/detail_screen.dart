@@ -20,10 +20,12 @@ class _DetailScreenState extends State<DetailScreen> {
   String? _historyError;
   int _selectedHours = 24;
   late final ApiService _api;
+  late Device _device; // lokal aktualisierbar nach Rename
 
   @override
   void initState() {
 	super.initState();
+	_device = widget.device;
 	_api = ApiService();
 	_loadHistory();
   }
@@ -34,15 +36,100 @@ class _DetailScreenState extends State<DetailScreen> {
 	super.dispose();
   }
 
+  /// Zeigt Dialog zum Aendern von Stationsname und Slug.
+  Future<void> _showRenameDialog() async {
+    final nameCtrl = TextEditingController(text: _device.name);
+    final slugCtrl = TextEditingController(text: _device.stationSlug);
+    String? dialogError;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Station umbenennen'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Name'),
+              const SizedBox(height: 4),
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(hintText: 'z.B. Waggum'),
+              ),
+              const SizedBox(height: 12),
+              const Text('Slug (API-Bezeichner)'),
+              const SizedBox(height: 4),
+              TextField(
+                controller: slugCtrl,
+                decoration: const InputDecoration(hintText: 'z.B. waggum'),
+              ),
+              if (dialogError != null) ...[
+                const SizedBox(height: 8),
+                Text(dialogError!, style: const TextStyle(color: Colors.red)),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Abbrechen'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final auth = context.read<AuthService>();
+                final token = auth.currentUser?.token;
+                if (token == null) {
+                  setDialogState(() => dialogError = 'Nicht eingeloggt.');
+                  return;
+                }
+                final newName = nameCtrl.text.trim();
+                final newSlug = slugCtrl.text.trim().toLowerCase();
+                if (newName.isEmpty || newSlug.isEmpty) {
+                  setDialogState(() => dialogError = 'Name und Slug duerfen nicht leer sein.');
+                  return;
+                }
+                try {
+                  await _api.updateStation(
+                    _device,
+                    currentSlug: _device.stationSlug,
+                    name: newName,
+                    newSlug: newSlug,
+                    bearerToken: token,
+                  );
+                  // Lokales Device und gespeichertes Device aktualisieren
+                  final updated = _device.copyWith(
+                    name: newName,
+                    stationSlug: newSlug,
+                  );
+                  if (!mounted) return;
+                  await context.read<DeviceProvider>().updateDevice(updated);
+                  setState(() => _device = updated);
+                  if (!mounted) return;
+                  Navigator.pop(ctx);
+                } catch (e) {
+                  setDialogState(() => dialogError = e.toString());
+                }
+              },
+              child: const Text('Speichern'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _loadHistory() async {
 	setState(() {
 	  _loadingHistory = true;
 	  _historyError = null;
 	});
 	try {
+	  final auth = context.read<AuthService>();
 	  final data = await _api.fetchHistory(
-		widget.device,
+		_device,
 		hours: _selectedHours,
+		bearerToken: auth.currentUser?.token,
 	  );
 	  setState(() => _history = data);
 	} catch (e) {
@@ -55,17 +142,22 @@ class _DetailScreenState extends State<DetailScreen> {
   @override
   Widget build(BuildContext context) {
 	final provider = context.watch<DeviceProvider>();
-	final measurement = provider.measurementFor(widget.device.id);
-	final loading = provider.isLoading(widget.device.id);
+	final measurement = provider.measurementFor(_device.id);
+	final loading = provider.isLoading(_device.id);
 
 	return Scaffold(
 	  appBar: AppBar(
-		title: Text(widget.device.name),
+		title: Text(_device.name),
 		actions: [
+		  IconButton(
+			icon: const Icon(Icons.edit_outlined),
+			tooltip: 'Station umbenennen',
+			onPressed: _showRenameDialog,
+		  ),
 		  IconButton(
 			icon: const Icon(Icons.refresh),
 			onPressed: () {
-			  provider.refreshDevice(widget.device.id);
+			  provider.refreshDevice(_device.id);
 			  _loadHistory();
 			},
 		  ),
@@ -73,7 +165,7 @@ class _DetailScreenState extends State<DetailScreen> {
 	  ),
 	  body: RefreshIndicator(
 		onRefresh: () async {
-		  provider.refreshDevice(widget.device.id);
+		  provider.refreshDevice(_device.id);
 		  await _loadHistory();
 		},
 		child: ListView(
@@ -83,7 +175,7 @@ class _DetailScreenState extends State<DetailScreen> {
 			_CurrentValues(
 			  measurement: measurement,
 			  loading: loading,
-			  error: provider.errorFor(widget.device.id),
+			  error: provider.errorFor(_device.id),
 			),
 			const SizedBox(height: 24),
 
@@ -178,7 +270,7 @@ class _DetailScreenState extends State<DetailScreen> {
 			const SizedBox(height: 24),
 
 			// API-Endpunkt Info
-			_DeviceInfo(device: widget.device),
+			_DeviceInfo(device: _device),
 		  ],
 		),
 	  ),

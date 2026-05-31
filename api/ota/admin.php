@@ -15,12 +15,16 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../lib/auth.php';
+require_once __DIR__ . '/../config/db.php';
 
 requireBasicAuth();
 
+$db           = getDb();
 $firmwareBase = __DIR__ . '/firmware';
 $message      = '';
 $messageType  = '';
+$stMessage    = '';
+$stMessageType = '';
 
 // ---- POST: Firmware oder Version hochladen ----
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -59,6 +63,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	}
 }
 
+// ---- POST: Stationsname/-Slug aendern ----
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_station') {
+	$stId   = (int)($_POST['station_id'] ?? 0);
+	$stName = trim($_POST['station_name'] ?? '');
+	$stSlug = trim(strtolower($_POST['station_slug'] ?? ''));
+
+	if (!$stId) {
+		$stMessage     = 'Ungueltige Station-ID.';
+		$stMessageType = 'error';
+	} elseif ($stName === '' || $stSlug === '') {
+		$stMessage     = 'Name und Slug duerfen nicht leer sein.';
+		$stMessageType = 'error';
+	} elseif (!preg_match('/^[a-z0-9][a-z0-9\-]{0,62}$/', $stSlug)) {
+		$stMessage     = 'Slug ungueltig (nur a-z, 0-9, Bindestrich).';
+		$stMessageType = 'error';
+	} else {
+		$dup = $db->prepare('SELECT id FROM stations WHERE slug = ? AND id != ? LIMIT 1');
+		$dup->execute([$stSlug, $stId]);
+		if ($dup->fetch()) {
+			$stMessage     = "Slug '$stSlug' ist bereits vergeben.";
+			$stMessageType = 'error';
+		} else {
+			$db->prepare('UPDATE stations SET name = ?, slug = ? WHERE id = ?')
+			   ->execute([$stName, $stSlug, $stId]);
+			$stMessage     = "Station aktualisiert: '$stName' (slug: $stSlug).";
+			$stMessageType = 'success';
+		}
+	}
+}
+
 // ---- Alle Sketch-Ordner einlesen ----
 $sketches = [];
 if (is_dir($firmwareBase)) {
@@ -77,6 +111,9 @@ if (is_dir($firmwareBase)) {
 		];
 	}
 }
+
+// ---- Stationen aus DB laden ----
+$stations = $db->query('SELECT id, slug, name FROM stations ORDER BY id')->fetchAll();
 
 ?><!DOCTYPE html>
 <html lang="de">
@@ -99,6 +136,8 @@ if (is_dir($firmwareBase)) {
   .card { border: 1px solid #ddd; border-radius: 6px; padding: 16px 20px; margin-bottom: 20px; }
   .card h3 { margin: 0 0 12px; font-size: 1rem; }
   input[type=text], input[type=file] { padding: 5px 8px; border: 1px solid #bbb; border-radius: 3px; }
+  input[type=text].slug { width: 160px; }
+  input[type=text].stname { width: 220px; }
   button { padding: 6px 16px; background: #0057a8; color: #fff; border: none; border-radius: 3px; cursor: pointer; }
   button:hover { background: #004080; }
   .sep { color: #bbb; margin: 0 6px; }
@@ -164,6 +203,37 @@ if (is_dir($firmwareBase)) {
 <p>Einfach einen neuen Ordner unter <code>api/ota/firmware/{sketch-id}/</code> anlegen
 und dort eine <code>version.txt</code> (Inhalt: Versionsnummer) ablegen.<br>
 Der neue Sketch erscheint beim naechsten Seitenaufruf automatisch.</p>
+
+<h2>Stationen</h2>
+<?php if ($stMessage !== ''): ?>
+<div class="msg-<?= $stMessageType ?>">
+  <?= htmlspecialchars($stMessage) ?>
+</div>
+<?php endif; ?>
+
+<?php if (empty($stations)): ?>
+<p><em>Keine Stationen in der Datenbank.</em></p>
+<?php else: ?>
+<table>
+  <tr><th>ID</th><th>Slug</th><th>Name</th><th>Aktion</th></tr>
+  <?php foreach ($stations as $st): ?>
+  <tr>
+    <td><?= htmlspecialchars((string)$st['id']) ?></td>
+    <td><?= htmlspecialchars($st['slug']) ?></td>
+    <td><?= htmlspecialchars($st['name']) ?></td>
+    <td>
+      <form method="post" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <input type="hidden" name="action" value="update_station">
+        <input type="hidden" name="station_id" value="<?= (int)$st['id'] ?>">
+        <input type="text" class="stname" name="station_name" value="<?= htmlspecialchars($st['name']) ?>" placeholder="Name" required>
+        <input type="text" class="slug"   name="station_slug" value="<?= htmlspecialchars($st['slug']) ?>" placeholder="slug" pattern="[a-z0-9][a-z0-9\-]{0,62}" required>
+        <button type="submit">Speichern</button>
+      </form>
+    </td>
+  </tr>
+  <?php endforeach; ?>
+</table>
+<?php endif; ?>
 
 <p style="margin-top:40px;color:#aaa;font-size:0.85rem">
   SWS OTA-Admin &bull; <?= date('d.m.Y H:i') ?>

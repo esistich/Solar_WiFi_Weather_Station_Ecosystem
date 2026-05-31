@@ -15,6 +15,7 @@
  *   POST /v1/push/unregister       – Push-Token entfernen
  *   POST /v1/invite/create         – Einladungscode erstellen (Admin)
  *   GET  /v1/invite/list           – Einladungscodes auflisten (Admin)
+ *   PATCH /v1/admin/stations       – Stationsname/-Slug aendern (JWT)
  */
 
 declare(strict_types=1);
@@ -59,7 +60,8 @@ $routes = [
 	'POST /push/unregister' => __DIR__ . '/auth/push_unregister.php',
 	'POST /invite/create'  => __DIR__ . '/auth/invite_create.php',
 	'GET /invite/list'     => __DIR__ . '/auth/invite_list.php',
-	'GET /metrics'         => __DIR__ . '/metrics.php',
+	'GET /metrics'              => __DIR__ . '/metrics.php',
+	'PATCH /admin/stations'     => __DIR__ . '/admin/stations_update.php',
 ];
 
 $key = "$method $uri";

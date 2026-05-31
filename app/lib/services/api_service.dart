@@ -89,6 +89,44 @@ return rows
   '${dt.month.toString().padLeft(2, '0')}-'
   '${dt.day.toString().padLeft(2, '0')}';
 
+  /// Aktualisiert Name und Slug einer Station (PATCH /v1/admin/stations – JWT).
+  /// [currentSlug] = aktueller Slug zur Identifikation,
+  /// [name] = neuer Anzeigename, [newSlug] = neuer Slug.
+  Future<Map<String, dynamic>> updateStation(
+    Device device, {
+    required String currentSlug,
+    required String name,
+    required String newSlug,
+    required String bearerToken,
+  }) async {
+    final uri = Uri.parse(device.historyUrl)
+        .replace(path: _adminStationsPath(device), queryParameters: {});
+    final response = await _client
+        .patch(
+          uri,
+          headers: {
+            ..._bearerHeaders(bearerToken),
+            HttpHeaders.contentTypeHeader: 'application/json',
+          },
+          body: jsonEncode({'slug': currentSlug, 'name': name, 'new_slug': newSlug}),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != 200) {
+      throw ApiException('HTTP ${response.statusCode}', uri.toString());
+    }
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return json['station'] as Map<String, dynamic>;
+  }
+
+  /// Liefert den Pfad zu PATCH /v1/admin/stations relativ zur History-URL.
+  String _adminStationsPath(Device device) {
+    final base = Uri.parse(device.historyUrl);
+    // history liegt unter /v1/history, admin/stations unter /v1/admin/stations
+    final parent = base.path.replaceFirst(RegExp(r'/history$'), '');
+    return '$parent/admin/stations';
+  }
+
   void dispose() => _client.close();
 }
 
