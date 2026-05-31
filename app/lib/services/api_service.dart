@@ -53,6 +53,7 @@ final now = DateTime.now();
 final from = now.subtract(Duration(hours: hours));
 
 final uri = Uri.parse(device.historyUrl).replace(queryParameters: {
+  if (device.stationSlug.isNotEmpty) 'station': device.stationSlug,
   'from':  _fmtDate(from),
   'to':    _fmtDate(now),
   'limit': '500',

@@ -22,12 +22,13 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   String? _error;
 
   // Formular-Felder
-  final _nameCtrl     = TextEditingController(text: 'Meine Station');
-  final _apiHostCtrl  = TextEditingController();
-  final _apiPathCtrl  = TextEditingController(text: '/sws/api/v1/data');
-  final _apiUserCtrl  = TextEditingController();
-  final _apiPassCtrl  = TextEditingController();
-  bool _apiHttps      = true;
+  final _nameCtrl        = TextEditingController(text: 'Meine Station');
+  final _apiHostCtrl     = TextEditingController();
+  final _apiPathCtrl     = TextEditingController(text: '/sws/api/v1/data');
+  final _apiUserCtrl     = TextEditingController();
+  final _apiPassCtrl     = TextEditingController();
+  final _stationSlugCtrl = TextEditingController();
+  bool _apiHttps         = true;
 
   // Soft-AP spezifisch
   final _ssidCtrl    = TextEditingController();
@@ -36,7 +37,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
 
   @override
   void dispose() {
-	for (final c in [_nameCtrl, _apiHostCtrl, _apiPathCtrl, _apiUserCtrl, _apiPassCtrl, _ssidCtrl, _passCtrl]) {
+	for (final c in [_nameCtrl, _apiHostCtrl, _apiPathCtrl, _apiUserCtrl, _apiPassCtrl, _stationSlugCtrl, _ssidCtrl, _passCtrl]) {
 	  c.dispose();
 	}
 	super.dispose();
@@ -87,11 +88,12 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
 		),
 	  2 => _ManualSetup(
 		  key: const ValueKey(2),
-		  nameCtrl:    _nameCtrl,
-		  apiHostCtrl: _apiHostCtrl,
-		  apiPathCtrl: _apiPathCtrl,
-		  apiUserCtrl: _apiUserCtrl,
-		  apiPassCtrl: _apiPassCtrl,
+		  nameCtrl:        _nameCtrl,
+		  apiHostCtrl:     _apiHostCtrl,
+		  apiPathCtrl:     _apiPathCtrl,
+		  apiUserCtrl:     _apiUserCtrl,
+		  apiPassCtrl:     _apiPassCtrl,
+		  stationSlugCtrl: _stationSlugCtrl,
 		  apiHttps:    _apiHttps,
 		  onHttpsChanged: (v) => setState(() => _apiHttps = v),
 		  busy:  _busy,
@@ -165,6 +167,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
 	  apiHttps:    _apiHttps,
 	  apiUser:     _apiUserCtrl.text.trim(),
 	  apiPassword: _apiPassCtrl.text,
+	  stationSlug: _stationSlugCtrl.text.trim(),
 	);
 	if (!mounted) return;
 	await context.read<DeviceProvider>().addDevice(device);
@@ -371,6 +374,7 @@ class _ManualSetup extends StatelessWidget {
   final TextEditingController apiPathCtrl;
   final TextEditingController apiUserCtrl;
   final TextEditingController apiPassCtrl;
+  final TextEditingController stationSlugCtrl;
   final bool apiHttps;
   final ValueChanged<bool> onHttpsChanged;
   final bool busy;
@@ -384,6 +388,7 @@ class _ManualSetup extends StatelessWidget {
 	required this.apiPathCtrl,
 	required this.apiUserCtrl,
 	required this.apiPassCtrl,
+	required this.stationSlugCtrl,
 	required this.apiHttps,
 	required this.onHttpsChanged,
 	required this.busy,
@@ -428,6 +433,12 @@ class _ManualSetup extends StatelessWidget {
 			controller: apiPassCtrl,
 			obscureText: true,
 			decoration: const InputDecoration(hintText: '••••••••'),
+		  ),
+		  const SizedBox(height: 12),
+		  _label('Station-Slug (für Verlaufsdaten)'),
+		  TextField(
+			controller: stationSlugCtrl,
+			decoration: const InputDecoration(hintText: 'z.B. waggum'),
 		  ),
 		  const SizedBox(height: 12),
 		  SwitchListTile(
