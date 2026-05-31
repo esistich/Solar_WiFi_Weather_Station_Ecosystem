@@ -150,5 +150,96 @@ match (true) {
 		]);
 	})(),
 
+	// POST api/credentials  { admin_password, api_user?, api_pass?, jwt_secret?, admin_pass? }
+	$sub === 'credentials' && $method === 'POST' => (function () {
+		$credFile = dirname(__DIR__) . '/config/credentials.php';
+		$d        = json_decode(file_get_contents('php://input'), true) ?? [];
+
+		$adminPw = trim($d['admin_password'] ?? '');
+		if ($adminPw === '')                                        adminJson(400, ['error' => 'admin_password fehlt']);
+		if (!defined('ADMIN_PASS_HASH') || !password_verify($adminPw, ADMIN_PASS_HASH))
+			adminJson(403, ['error' => 'Ungültiges Admin-Passwort']);
+
+		$newApiUser   = trim($d['api_user']   ?? '');
+		$newApiPass   = trim($d['api_pass']   ?? '');
+		$newJwtSecret = trim($d['jwt_secret'] ?? '');
+		$newAdminPass = trim($d['admin_pass'] ?? '');
+
+		if ($newApiUser === '' && $newApiPass === '' && $newJwtSecret === '' && $newAdminPass === '')
+			adminJson(400, ['error' => 'Mindestens ein Feld (api_user, api_pass, jwt_secret, admin_pass) muss angegeben sein']);
+
+		if ($newApiPass   !== '' && strlen($newApiPass)   < 12) adminJson(400, ['error' => 'api_pass muss ≥ 12 Zeichen haben']);
+		if ($newAdminPass !== '' && strlen($newAdminPass) < 12) adminJson(400, ['error' => 'admin_pass muss ≥ 12 Zeichen haben']);
+		if ($newJwtSecret !== '' && strlen($newJwtSecret) < 32) adminJson(400, ['error' => 'jwt_secret muss ≥ 32 Zeichen haben']);
+
+		$esc = static fn(string $v): string => str_replace(["\\", "'"], ["\\\\", "\\'"], $v);
+
+		$finalApiUser   = $newApiUser   !== '' ? $newApiUser   : (defined('API_USER')         ? API_USER         : '');
+		$finalApiPass   = $newApiPass   !== '' ? $newApiPass   : (defined('API_PASS')         ? API_PASS         : '');
+		$finalJwt       = $newJwtSecret !== '' ? $newJwtSecret : (defined('JWT_SECRET_VALUE') ? JWT_SECRET_VALUE : '');
+		$finalTtl       = defined('JWT_TTL')   ? JWT_TTL       : (30 * 24 * 3600);
+		$finalAdminUser = defined('ADMIN_USER')? ADMIN_USER     : 'admin';
+		$finalAdminHash = $newAdminPass !== '' ? $esc(password_hash($newAdminPass, PASSWORD_BCRYPT)) : $esc(ADMIN_PASS_HASH);
+
+		$php = "<?php\n/**\n * credentials.php – generiert am " . gmdate('Y-m-d H:i:s') . " UTC\n * NICHT committen!\n */\n\n"
+			. "define('API_USER',        '{$esc($finalApiUser)}');\n"
+			. "define('API_PASS',        '{$esc($finalApiPass)}');\n"
+			. "define('JWT_SECRET_VALUE','{$esc($finalJwt)}');\n"
+			. "define('JWT_TTL',         {$finalTtl});\n"
+			. "define('ADMIN_USER',      '{$esc($finalAdminUser)}');\n"
+			. "define('ADMIN_PASS_HASH', '{$finalAdminHash}');\n";
+
+		$tmp = tempnam(dirname($credFile), '.cred_');
+		if ($tmp === false || file_put_contents($tmp, $php) === false)
+			adminJson(500, ['error' => 'Datei konnte nicht geschrieben werden']);
+		rename($tmp, $credFile);
+
+		$rotated = array_filter([
+			$newApiUser   !== '' ? 'api_user'   : '',
+			$newApiPass   !== '' ? 'api_pass'   : '',
+			$newJwtSecret !== '' ? 'jwt_secret' : '',
+			$newAdminPass !== '' ? 'admin_pass' : '',
+		]);
+		adminJson(200, ['success' => true, 'rotated' => array_values($rotated), 'rotated_at' => gmdate('Y-m-d H:i:s') . ' UTC']);
+	})(),
+
+	// GET api/errorlog?level=error&station=slug&limit=200
+	$sub === 'errorlog' && $method === 'GET' => (function () use ($pdo) {
+		$level   = trim($_GET['level']   ?? '');
+		$stSlug  = trim($_GET['station'] ?? '');
+		$limit   = min((int)($_GET['limit'] ?? 100), 500);
+
+		$where = [];
+		$bind  = [];
+
+		if (in_array($level, ['error', 'warning', 'info'], true)) {
+			$where[] = 'se.level = ?';
+			$bind[]  = $level;
+		}
+		if ($stSlug !== '') {
+			$where[] = 's.slug = ?';
+			$bind[]  = $stSlug;
+		}
+
+		$sql = 'SELECT se.id, se.station_id, s.slug AS station_slug, s.name AS station_name,
+					   se.level, se.code, se.message, se.context, se.created_at
+				FROM station_errors se
+				LEFT JOIN stations s ON s.id = se.station_id'
+			. ($where ? ' WHERE ' . implode(' AND ', $where) : '')
+			. ' ORDER BY se.id DESC LIMIT ' . $limit;
+
+		$st = $pdo->prepare($sql);
+		$st->execute($bind);
+		$rows = $st->fetchAll();
+
+		// JSON-Kontext dekodieren
+		foreach ($rows as &$r) {
+			if ($r['context'] !== null) $r['context'] = json_decode($r['context'], true);
+		}
+		unset($r);
+
+		adminJson(200, $rows);
+	})(),
+
 	default => adminJson(404, ['error' => 'Unbekannte Admin-Aktion']),
 };

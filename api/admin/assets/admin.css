@@ -73,3 +73,31 @@ tr:hover td { background: var(--surface); }
 .modal-actions { display: flex; gap: .75rem; justify-content: flex-end; margin-top: .5rem; }
 .btn-save { background: var(--success); border: none; border-radius: 6px; padding: .5rem 1.1rem;
             cursor: pointer; font-weight: 600; color: #fff; }
+
+/* ---- Credentials-Formular ---- */
+.section-hint { color: var(--muted); font-size: .88rem; margin-bottom: 1.5rem; line-height: 1.5; }
+.section-hint code { background: var(--bg); border: 1px solid var(--border); padding: .1rem .4rem; border-radius: 4px; font-size: .82rem; }
+.cred-form-wrap { max-width: 620px; }
+.cred-form fieldset { border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.2rem 1.2rem; margin-bottom: 1.2rem; }
+.cred-form legend { color: var(--muted); font-size: .8rem; font-weight: 600; padding: 0 .4rem; text-transform: uppercase; letter-spacing: .04em; }
+.cred-form label { display: flex; flex-direction: column; gap: .3rem; font-size: .85rem; color: var(--muted); margin-top: .75rem; }
+.cred-form input { padding: .55rem .8rem; background: var(--bg); border: 1px solid var(--border);
+                   border-radius: 6px; color: var(--text); font-size: .95rem; }
+.cred-form input:focus { outline: none; border-color: var(--accent); }
+.cred-form .hint { font-size: .76rem; color: var(--muted); }
+.cred-form .req { color: var(--danger); }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+.btn-row { display: flex; justify-content: flex-end; margin-top: .5rem; }
+.msg-ok  { color: var(--success); background: rgba(89,161,79,.12); border: 1px solid var(--success);
+           border-radius: 6px; padding: .6rem .9rem; font-size: .88rem; margin-bottom: .8rem; }
+.msg-err { color: var(--danger);  background: rgba(225,87,89,.12);  border: 1px solid var(--danger);
+           border-radius: 6px; padding: .6rem .9rem; font-size: .88rem; margin-bottom: .8rem; }
+
+/* ---- Fehler-Log ---- */
+.errorlog-filter { display: flex; gap: .75rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+.errorlog-filter select { padding: .45rem .7rem; background: var(--bg); border: 1px solid var(--border);
+                          border-radius: 6px; color: var(--text); font-size: .88rem; }
+.badge { display: inline-block; padding: .15rem .5rem; border-radius: 4px; font-size: .75rem; font-weight: 700; }
+.badge-error   { background: rgba(225,87,89,.2);  color: var(--danger); }
+.badge-warning { background: rgba(245,166,35,.2); color: var(--accent); }
+.badge-info    { background: rgba(89,161,79,.2);  color: var(--success); }

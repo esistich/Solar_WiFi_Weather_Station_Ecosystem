@@ -80,6 +80,8 @@ if (!$loggedIn): ?>
   <a href="#users"     class="nav-link" data-section="users">Benutzer</a>
   <a href="#invites"   class="nav-link" data-section="invites">Einladungen</a>
   <a href="#live"      class="nav-link" data-section="live">Live-Daten</a>
+  <a href="#credentials" class="nav-link" data-section="credentials">🔐 Credentials</a>
+  <a href="#errorlog"  class="nav-link" data-section="errorlog">⚠️ Fehler-Log</a>
   <a href="?action=logout" class="nav-link logout">Abmelden</a>
 </nav>
 <main class="content">
@@ -107,6 +109,66 @@ if (!$loggedIn): ?>
 	  <select id="live-station"></select>
 	</label>
 	<div id="live-data" class="live-grid"></div>
+  </section>
+
+  <section id="credentials" class="section hidden">
+	<h2>🔐 Credentials rotieren</h2>
+	<p class="section-hint">Ändere API-Zugangsdaten, Admin-Passwort oder JWT-Secret direkt hier.<br>
+	  Geänderte API-Zugangsdaten müssen anschließend in <code>Settings26.h</code> der Station eingetragen werden.</p>
+
+	<div class="cred-form-wrap">
+	  <div id="cred-msg"></div>
+	  <form id="cred-form" class="cred-form">
+		<fieldset>
+		  <legend>Aktuelles Admin-Passwort (zur Bestätigung)</legend>
+		  <label>Admin-Passwort <span class="req">*</span>
+			<input type="password" name="admin_password" required autocomplete="current-password" placeholder="Aktuelles Passwort">
+		  </label>
+		</fieldset>
+		<fieldset>
+		  <legend>API-Zugangsdaten (Station → API)</legend>
+		  <div class="form-row">
+			<label>API-Benutzername
+			  <input type="text" name="api_user" autocomplete="off" placeholder="Leer = nicht ändern">
+			</label>
+			<label>API-Passwort
+			  <input type="password" name="api_pass" autocomplete="new-password" placeholder="min. 12 Zeichen">
+			</label>
+		  </div>
+		</fieldset>
+		<fieldset>
+		  <legend>Admin-Dashboard Login</legend>
+		  <div class="form-row">
+			<label>Neues Admin-Passwort
+			  <input type="password" name="admin_pass" autocomplete="new-password" placeholder="min. 12 Zeichen">
+			</label>
+			<label>Passwort wiederholen
+			  <input type="password" name="admin_pass_confirm" autocomplete="new-password" placeholder="Wiederholung">
+			</label>
+		  </div>
+		</fieldset>
+		<fieldset>
+		  <legend>JWT-Secret (Flutter-App)</legend>
+		  <label>JWT-Secret
+			<input type="text" name="jwt_secret" autocomplete="off" placeholder="Leer = nicht ändern">
+			<span class="hint">Mindestens 32 Zeichen. Nach Änderung müssen alle App-Nutzer sich neu anmelden.</span>
+		  </label>
+		</fieldset>
+		<div class="btn-row">
+		  <button type="submit" class="btn-save" id="cred-submit">Credentials speichern</button>
+		</div>
+	  </form>
+	</div>
+  </section>
+
+  <section id="errorlog" class="section hidden">
+	<h2>⚠️ Stationsfehler</h2>
+	<div class="errorlog-filter">
+	  <select id="err-level"><option value="">Alle Level</option><option value="error">error</option><option value="warning">warning</option><option value="info">info</option></select>
+	  <select id="err-station"><option value="">Alle Stationen</option></select>
+	  <button class="btn-add" onclick="loadErrorLog()">Aktualisieren</button>
+	</div>
+	<div id="errorlog-table"></div>
   </section>
 </main>
 

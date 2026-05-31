@@ -168,12 +168,94 @@ document.getElementById('live-station')?.addEventListener('change', loadLive);
 
 // ---- Loader-Map ----
 const loaders = {
-  stations: loadStations,
-  metrics:  loadMetrics,
-  users:    loadUsers,
-  invites:  loadInvites,
-  live:     () => { loadStations().then(loadLive); clearInterval(liveTimer); liveTimer = setInterval(loadLive, 30_000); },
+  stations:    loadStations,
+  metrics:     loadMetrics,
+  users:       loadUsers,
+  invites:     loadInvites,
+  live:        () => { loadStations().then(loadLive); clearInterval(liveTimer); liveTimer = setInterval(loadLive, 30_000); },
+  credentials: () => {},   // kein Vorladen nötig
+  errorlog:    loadErrorLog,
 };
+
+// ---- Credentials-Formular ----
+document.getElementById('cred-form')?.addEventListener('submit', async e => {
+  e.preventDefault();
+  const f   = e.target;
+  const msg = document.getElementById('cred-msg');
+
+  // Client-seitige Validierung
+  const ap  = f.admin_pass.value;
+  const ap2 = f.admin_pass_confirm.value;
+  if (ap && ap !== ap2) {
+    msg.innerHTML = '<div class="msg-err">Admin-Passwörter stimmen nicht überein.</div>';
+    return;
+  }
+
+  const body = { admin_password: f.admin_password.value };
+  if (f.api_user.value)   body.api_user   = f.api_user.value;
+  if (f.api_pass.value)   body.api_pass   = f.api_pass.value;
+  if (ap)                 body.admin_pass = ap;
+  if (f.jwt_secret.value) body.jwt_secret = f.jwt_secret.value;
+
+  const btn = document.getElementById('cred-submit');
+  btn.disabled = true;
+  btn.textContent = 'Speichere…';
+
+  const res = await api('credentials', 'POST', body);
+  btn.disabled = false;
+  btn.textContent = 'Credentials speichern';
+
+  if (res.success) {
+    const changed = (res.rotated ?? []).join(', ');
+    msg.innerHTML = `<div class="msg-ok">✅ Gespeichert: ${changed} – ${res.rotated_at}</div>`;
+    f.reset();
+  } else {
+    msg.innerHTML = `<div class="msg-err">❌ ${res.error ?? 'Unbekannter Fehler'}</div>`;
+  }
+});
+
+// ---- Fehler-Log ----
+async function loadErrorLog() {
+  const level   = document.getElementById('err-level')?.value   ?? '';
+  const station = document.getElementById('err-station')?.value ?? '';
+  const params  = new URLSearchParams({ action: 'api/errorlog' });
+  if (level)   params.set('level',   level);
+  if (station) params.set('station', station);
+
+  const res = await fetch(`index.php?${params}`, { credentials: 'same-origin' });
+  const data = await res.json();
+  const rows = Array.isArray(data) ? data : (data.rows ?? []);
+
+  const el = document.getElementById('errorlog-table');
+  if (!rows.length) { el.innerHTML = '<p style="color:var(--muted)">Keine Einträge.</p>'; return; }
+
+  const badgeClass = lvl => ({ error:'badge-error', warning:'badge-warning', info:'badge-info' }[lvl] ?? '');
+  el.innerHTML = `<table><thead><tr>
+    <th>Zeit</th><th>Station</th><th>Level</th><th>Code</th><th>Nachricht</th><th>Kontext</th>
+  </tr></thead><tbody>` +
+  rows.map(r => `<tr>
+    <td style="white-space:nowrap;font-size:.8rem">${r.created_at ?? ''}</td>
+    <td>${r.station_slug ?? r.station_id ?? ''}</td>
+    <td><span class="badge ${badgeClass(r.level)}">${r.level}</span></td>
+    <td style="font-family:monospace;font-size:.82rem">${r.code}</td>
+    <td>${r.message}</td>
+    <td style="font-size:.78rem;color:var(--muted)">${r.context ? JSON.stringify(r.context) : ''}</td>
+  </tr>`).join('') + '</tbody></table>';
+}
+
+// Stationen auch in Fehler-Log-Filter laden
+async function populateErrStations() {
+  const rows = await api('stations');
+  const sel  = document.getElementById('err-station');
+  if (!sel || !Array.isArray(rows)) return;
+  rows.forEach(s => {
+    const o = document.createElement('option');
+    o.value       = s.slug;
+    o.textContent = s.name;
+    sel.appendChild(o);
+  });
+}
 
 // Start
 showSection('stations');
+populateErrStations();

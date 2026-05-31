@@ -3,28 +3,24 @@ upload/
 
 # Visual Studio
 .vs/
-
 # Arduino Build-Ordner
 build/
 *.bin
 *.elf
 *.map
-
 # Secrets – niemals committen
 jwt_secret.php
 *firebase*adminsdk*.json
 google-services.json
 upload_package.zip
-
 # API-Konfigurationsdateien mit echten Credentials (nur .example-Vorlagen committen)
 api/config/db.php
 api/config/credentials.php
 api/lib/auth.php
 api/lib/db.php
-
 # Firebase Service-Account-Schlüssel
 api/*adminsdk*.json
 *adminsdk*.json
-
 # Flutter Firebase-Konfiguration (lokal regenerieren: flutterfire configure)
 app/lib/firebase_options.dart
+api/install/.setup_done
