@@ -442,8 +442,8 @@ SWS (ESP8266)  ──HTTPS POST──▶  api/data.php  ◀──HTTPS GET──
 1. `api/homeassistant/ha_sensors.yaml` in dein HA-Konfigurationsverzeichnis kopieren
 2. In `ha_sensors.yaml` ersetzen:
    - `timm-sander.net/swsapi` → bereits korrekt
-   - `NAy1b4GpuS3dEvej` → `NAy1b4GpuS3dEvej`
-   - `REDACTED_API_PASS` → `REDACTED_API_PASS`
+   - `<API_USER>` → dein API-Benutzername (siehe `api/config/auth.php`)
+   - `<API_PASS>` → dein API-Passwort (siehe `api/config/auth.php`)
 3. In `configuration.yaml` einbinden:
    ```yaml
    homeassistant:
