@@ -41,7 +41,14 @@ const String Version = "2.7";
 #include "Translations/Translation_DE.h"
 // #include "Translations/Translation_EN.h"
 
-/******* Sensor Configuration ************************************************
+// Indizes in LANG_PRESSURE[] - muessen mit den Translation-Dateien uebereinstimmen
+#define PRESS_STORM_LOW   0   // < 990 hPa
+#define PRESS_STRONG_LOW  1   // 990-999 hPa
+#define PRESS_LOW         2   // 1000-1012 hPa
+#define PRESS_HIGH        3   // 1013-1024 hPa
+#define PRESS_STRONG_HIGH 4   // >= 1025 hPa
+
+/******* Sensor Configuration
  * BME280 ist immer aktiv und liefert Temperatur, Luftfeuchtigkeit und Druck.
  * Der DS18B20 ist ein optionaler Zusatzfuehler (z.B. Pool, Boden, Zisterne)
  * und wird immer als "pool_temperature" an die API gesendet.
