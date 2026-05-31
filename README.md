@@ -11,8 +11,10 @@ Branch: `feature/v2.7-config-portal-api`
 ## Was ist das?
 
 Eine Solar-betriebene WiFi-Wetterstation auf Basis des **WEMOS D1 Mini Pro (ESP8266)**.  
-Die Station misst Temperatur, Luftfeuchtigkeit, Luftdruck und Pooltemperatur,  
-berechnet die **Zambretti-Wetterprognose** und sendet alle Daten an eine **PHP/MySQL-REST-API**.
+Die Station misst Temperatur, Luftfeuchtigkeit, Luftdruck und optional Pooltemperatur (DS18B20),  
+und sendet alle Daten an eine **PHP/MySQL-REST-API**. Die **Zambretti-Wetterprognose** wird  
+serverseitig berechnet. Fehler werden persistent über die API gespeichert und sind auch ohne  
+Serial Monitor abrufbar.
 
 ---
 
@@ -41,19 +43,27 @@ Solar_WiFi_Weather_Station/
 │   ├── DisplaySettings.h                      # WiFi, API, Pins, Helligkeit
 │   └── README.md                              # Verdrahtung & Bibliotheken
 ├── api/
-│   ├── data.php          # POST Messung / GET letzter Datensatz  ← Firmware-Endpoint
-│   ├── history.php       # GET Historien-Daten
-│   ├── status.php        # Systemstatus
-│   ├── index.html        # Platzhalter-Startseite
-│   ├── .htaccess         # HTTPS-Weiterleitung + Schutz lib/
-│   ├── lib/
-│   │   ├── auth.php      # HTTP-Basic-Auth
-│   │   └── db.php        # Datenbankverbindung
-│   ├── homeassistant/
-│   │   └── ha_sensors.yaml
+│   ├── .htaccess             # mod_rewrite: /v1/* → v1/index.php, HTTPS-Weiterleitung
+│   ├── data.php              # Legacy-Shim (ältere Firmware-Clients)
+│   ├── history.php           # Legacy-Shim
+│   ├── status.php            # Legacy-Shim
+│   ├── config/
+│   │   ├── auth.php          # Basic Auth, JWT, CORS, sendJson()
+│   │   ├── db.php            # PDO-Verbindung (UTC-Session)
+│   │   └── jwt.php           # JWT-Hilfsfunktionen
+│   ├── v1/
+│   │   ├── index.php         # Zentraler v1-Router (alle Routen hier registriert)
+│   │   ├── data.php          # POST Messung / GET letzter Datensatz
+│   │   ├── history.php       # GET Historien-Daten (EAV-Abfrage)
+│   │   ├── status.php        # GET Systemstatus
+│   │   ├── stations.php      # GET/POST Stationen
+│   │   ├── zambretti.php     # GET Zambretti-Prognose (serverseitig berechnet)
+│   │   ├── log.php           # POST Fehler schreiben / GET Fehler lesen
+│   │   └── helpers.php       # resolveStation() u.a. gemeinsame Hilfsfunktionen
+│   ├── admin/                # Admin-Dashboard (Session-Auth)
 │   ├── install/
-│   │   └── schema.sql    # Datenbankschema + Migration
-│   └── README.md         # API-Dokumentation
+│   │   └── migrate_v2.sql    # Vollständiges Datenbankschema inkl. station_errors
+│   └── README.md             # API-Dokumentation
 ├── docs/
 │   ├── IMG_2951.jpg
 │   └── Node-Red-Dashboard.png
@@ -100,21 +110,48 @@ Das Portal läuft **ohne Zeitlimit**. Neustart nur per „Speichern" oder Hardwa
 
 ---
 
-## REST-API
+## REST-API (v1)
 
 → Vollständige Dokumentation: [`api/README.md`](api/README.md)
 
 Deployment: `https://timm-sander.net/swsapi`
 
+Alle Routen laufen über `api/v1/index.php` (mod_rewrite):
+
+| Methode | Route           | Auth          | Beschreibung                          |
+|---------|-----------------|---------------|---------------------------------------|
+| GET     | `/v1/data`      | JWT Bearer    | Letzter Messdatensatz                 |
+| POST    | `/v1/data`      | Basic Auth    | Messung hochladen                     |
+| GET     | `/v1/history`   | JWT Bearer    | Historien-Daten (mit Filterparametern)|
+| GET     | `/v1/status`    | JWT Bearer    | Systemstatus (DB, letzte Messung)     |
+| GET     | `/v1/stations`  | JWT Bearer    | Stationsliste                         |
+| GET     | `/v1/zambretti` | JWT Bearer    | Zambretti-Prognose (serverseitig)     |
+| GET     | `/v1/log`       | JWT Bearer    | Stationsfehler lesen                  |
+| POST    | `/v1/log`       | Basic Auth    | Fehler/Warnung von Station schreiben  |
+
+### Fehler-Logging (`/v1/log`)
+
+Die Station schreibt Fehler automatisch in die API, ohne dass der Serial Monitor benötigt wird.  
+Einträge sind filterbar nach `level`, `code`, `from`, `to` und `limit`.
+
+Beispiel GET:
+```
+GET /v1/log?level=error&limit=20
+Authorization: Bearer <jwt>
+```
+
+Bekannte Fehlercodes der Station:
+
+| Code                  | Level   | Auslöser                                      |
+|-----------------------|---------|-----------------------------------------------|
+| `DS18B20_INVALID`     | warning | DS18B20 liefert keinen gültigen Wert          |
+| `DS18B20_FAIL_FALLBACK` | warning | Fallback auf BME280 als Aussentemperatur      |
+| `BUFFER_OVERFLOW`     | error   | JSON-Payload wurde abgeschnitten              |
+| `API_HTTP_ERROR`      | error   | HTTP-Fehler beim POST an `/v1/data`           |
+
 ---
 
-## Home Assistant Integration
-
-→ Sensor-Definition: [`api/ha_sensors.yaml`](api/ha_sensors.yaml)
-
----
-
-## Pin-Plan (WEMOS D1 Mini Pro)
+## Pin-Plan
 
 | Pin | GPIO | Funktion             |
 |-----|------|----------------------|
@@ -129,9 +166,10 @@ Deployment: `https://timm-sander.net/swsapi`
 
 ## Zambretti-Prognose
 
-Die Station berechnet die [Zambretti-Wetterprognose](https://www.iquilezles.org/www/articles/zambretti/zambretti.htm)  
-aus dem 6-Stunden-Druckverlauf. Daten werden lokal im SPIFFS gespeichert.  
-`zambrettisays`, `zletter`, `trend` und `accuracy` werden mit jedem API-Upload übermittelt.
+Die [Zambretti-Wetterprognose](https://www.iquilezles.org/www/articles/zambretti/zambretti.htm)
+wird **serverseitig** in `api/v1/zambretti.php` berechnet – nicht mehr auf der Station.  
+Grundlage sind die letzten 12 `rel_pressure`-Werte aus der Datenbank.  
+Ergebnis: `zambretti`, `zambretti_text`, `trend`, `trend_text`, `pressure_state`, `accuracy_pct`.
 
 ---
 
@@ -146,16 +184,12 @@ aus dem 6-Stunden-Druckverlauf. Daten werden lokal im SPIFFS gespeichert.
 | EasyNTPClient           | https://github.com/aharshac/EasyNTPClient |
 | Time (PaulStoffregen)   | Arduino Library Manager             |
 | ArduinoJson             | Arduino Library Manager             |
-| PubSubClient            | *nicht mehr benötigt*               |
 
 ---
 
 ## Fotos
 
 ![Station](docs/IMG_2951.jpg)
-
-Node-RED Dashboard (MQTT-Beispiel aus älteren Versionen):  
-![Node-RED](docs/Node-Red-Dashboard.png)
 
 ---
 
