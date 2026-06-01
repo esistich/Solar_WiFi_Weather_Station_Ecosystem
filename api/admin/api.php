@@ -28,14 +28,24 @@ function bodyJson(): array
 match (true) {
 
 	// GET api/stations
-	$sub === 'stations' && $method === 'GET' => (function () use ($pdo) {
-		$rows = $pdo->query('SELECT id, slug, name, mac, settings, created_at FROM stations ORDER BY id')->fetchAll();
-		// settings als Objekt statt String zurÃ¼ckgeben
-		foreach ($rows as &$row) {
-			$row['settings'] = isset($row['settings']) ? (json_decode($row['settings'], true) ?? new stdClass()) : new stdClass();
-		}
-		adminJson(200, $rows);
-	})(),
+$sub === 'stations' && $method === 'GET' => (function () use ($pdo) {
+// Letzte Aktivitaet und Firmware-Version aus letzter Messung hinzufuegen
+$rows = $pdo->query(
+'SELECT s.id, s.slug, s.name, s.mac, s.settings, s.created_at,
+        m.created_at   AS last_seen,
+        mv.value       AS fw_version
+ FROM stations s
+ LEFT JOIN measurements m ON m.id = (
+     SELECT id FROM measurements WHERE station_id = s.id ORDER BY id DESC LIMIT 1
+ )
+ LEFT JOIN measurement_values mv ON mv.measurement_id = m.id AND mv.metric_key = \'fw_version\'
+ ORDER BY s.id'
+)->fetchAll();
+foreach ($rows as &$row) {
+$row['settings'] = isset($row['settings']) ? (json_decode($row['settings'], true) ?? new stdClass()) : new stdClass();
+}
+adminJson(200, $rows);
+})(),
 
 	// POST api/stations  { slug, name }
 	$sub === 'stations' && $method === 'POST' => (function () use ($pdo) {

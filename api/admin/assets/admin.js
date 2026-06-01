@@ -50,12 +50,14 @@ async function loadStations() {
   const el = document.getElementById('stations-table');
   if (!rows.length) { el.innerHTML = '<p class="fg-secondary">Keine Einträge.</p>'; return; }
   el.innerHTML = `<table>
-    <thead><tr><th>ID</th><th>Slug</th><th>Name</th><th>MAC</th><th>Erstellt</th><th></th><th></th></tr></thead>
+    <thead><tr><th>ID</th><th>Slug</th><th>Name</th><th>MAC</th><th>Letzte Aktivit&#228;t</th><th>Firmware</th><th>Erstellt</th><th></th><th></th></tr></thead>
     <tbody>${rows.map(r => `<tr>
       <td>${r.id}</td>
       <td><code>${r.slug}</code></td>
       <td>${r.name}</td>
       <td class="fg-secondary" style="font-size:.82rem;font-family:monospace">${r.mac ?? '–'}</td>
+      <td class="fg-secondary" style="font-size:.85rem">${r.last_seen ?? '–'}</td>
+      <td style="font-size:.82rem">${r.fw_version ? '<code>'+r.fw_version+'</code>' : '–'}</td>
       <td class="fg-secondary" style="font-size:.85rem">${r.created_at ?? ''}</td>
       <td><button class="btn-edit" onclick="editStation(${r.id},'${r.slug.replace(/'/g,"\\'")}','${r.name.replace(/'/g,"\\'")}','${(r.mac??'').replace(/'/g,"\\'")}')">Bearbeiten</button></td>
       <td><button class="btn-del"  onclick="deleteStation(${r.id})">Löschen</button></td>
