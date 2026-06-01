@@ -16,7 +16,8 @@
  * Neue Sketches: einfach einen neuen Unterordner unter firmware/ anlegen.
  */
 
-require_once __DIR__ . '/../lib/auth.php';
+require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../config/auth.php';
 
 requireBasicAuth();
 

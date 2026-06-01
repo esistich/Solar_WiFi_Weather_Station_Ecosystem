@@ -1,0 +1,10 @@
+# api/install/.htaccess – Direktzugriff auf SQL/Konfig-Dateien verweigern
+# run_migrate.php ist über Token zugänglich
+<FilesMatch "\.(sql|php)$">
+	Require all denied
+</FilesMatch>
+
+# run_migrate.php explizit erlauben (Token-geschützt)
+<Files "run_migrate.php">
+	Require all granted
+</Files>

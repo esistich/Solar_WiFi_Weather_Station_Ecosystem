@@ -80,6 +80,10 @@ void SWSApiClient::setStationName(const char* name) {
 	_stationName = name;
 }
 
+void SWSApiClient::setDeviceMac(const char* mac) {
+	_deviceMac = mac;
+}
+
 void SWSApiClient::setLogPath(const char* logPath) {
 	_logPath = logPath;
 }
@@ -95,6 +99,10 @@ SWSResult SWSApiClient::send() {
 	// Stationsname automatisch hinzufuegen wenn gesetzt
 	if (_stationName.length() > 0 && !_doc.containsKey("station_name")) {
 		_doc["station_name"] = _stationName;
+	}
+	// Geraete-MAC automatisch hinzufuegen wenn gesetzt
+	if (_deviceMac.length() > 0 && !_doc.containsKey("device_mac")) {
+		_doc["device_mac"] = _deviceMac;
 	}
 
 	// JSON serialisieren

@@ -33,7 +33,7 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> login(String email, String password) async {
-	final user = await _post('auth/login', {
+	  final user = await _post('auth/login', {
 	  'email': email,
 	  'password': password,
 	});
@@ -41,7 +41,7 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> register(String email, String password, String inviteCode) async {
-	final user = await _post('auth/register', {
+	  final user = await _post('auth/register', {
 	  'email': email,
 	  'password': password,
 	  'invite_code': inviteCode,
@@ -59,17 +59,33 @@ class AuthService extends ChangeNotifier {
 
   Future<AppUser> _post(String path, Map<String, dynamic> body) async {
 	final uri = Uri.parse('$_backendUrl/$path');
-	final response = await http
-		.post(
-		  uri,
-		  headers: {'Content-Type': 'application/json'},
-		  body: jsonEncode(body),
-		)
-		.timeout(const Duration(seconds: 10));
+	final http.Response response;
+	try {
+	  response = await http
+		  .post(
+			uri,
+			headers: {'Content-Type': 'application/json'},
+			body: jsonEncode(body),
+		  )
+		  .timeout(const Duration(seconds: 10));
+	} catch (e) {
+	  throw Exception('Netzwerkfehler: $e');
+	}
 
-	final json = jsonDecode(response.body) as Map<String, dynamic>;
+	// Leere Antwort abfangen (z.B. bei Netzwerk-Proxy)
+	if (response.body.isEmpty) {
+	  throw Exception('Keine Antwort vom Server (HTTP ${response.statusCode})');
+	}
+
+	Map<String, dynamic> json;
+	try {
+	  json = jsonDecode(response.body) as Map<String, dynamic>;
+	} catch (_) {
+	  throw Exception('Ungültige Server-Antwort (HTTP ${response.statusCode})');
+	}
+
 	if (response.statusCode >= 400) {
-	  throw Exception(json['error'] ?? 'Fehler beim Login');
+	  throw Exception(json['error'] ?? 'Fehler (HTTP ${response.statusCode})');
 	}
 	return AppUser.fromJson(json);
   }

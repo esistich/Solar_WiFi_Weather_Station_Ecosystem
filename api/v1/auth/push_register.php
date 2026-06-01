@@ -12,7 +12,7 @@ declare(strict_types=1);
 $payload = requireJwt();
 $db      = getDb();
 $body    = json_decode(file_get_contents('php://input'), true) ?? [];
-$token   = trim($body['token'] ?? '');
+$token   = trim($body['fcm_token'] ?? $body['token'] ?? '');
 
 if (!$token) {
 	sendJson(400, ['error' => 'token erforderlich']);

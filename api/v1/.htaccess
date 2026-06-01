@@ -3,6 +3,10 @@ Options -Indexes
 RewriteEngine On
 RewriteBase /sws/api/v1
 
+# Authorization-Header an PHP weitergeben (CGI/FastCGI auf Shared Hosting)
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
 # Alle Requests an index.php weiterleiten (außer echte Dateien)
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d

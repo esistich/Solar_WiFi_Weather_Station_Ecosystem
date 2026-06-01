@@ -4,8 +4,6 @@
  * Wird von auth-Endpunkten eingebunden.
  */
 
-declare(strict_types=1);
-
 if (!defined('JWT_SECRET_VALUE')) {
 	throw new RuntimeException('JWT_SECRET_VALUE nicht konfiguriert – config/auth.php einbinden');
 }

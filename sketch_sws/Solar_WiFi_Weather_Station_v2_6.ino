@@ -120,7 +120,95 @@ static void initApiClient() {
   apiClient = new SWSApiClient(cfg.api_host, cfg.api_path,
                                cfg.api_user, cfg.api_pass, cfg.api_https);
   apiClient->setStationName(cfg.station_name);
+  apiClient->setDeviceMac(WiFi.macAddress().c_str());
 }
+
+// Remote-Config: Einstellungen einmalig nach WiFi-Connect vom Server abrufen.
+// Geaenderte Felder werden sofort in cfg uebernommen und ins EEPROM geschrieben.
+#if USE_REMOTE_CONFIG
+static void fetchRemoteConfig() {
+  String proto = cfg.api_https ? "https" : "http";
+  String url   = proto + "://" + cfg.api_host + CFG_REMOTE_CONFIG_PATH
+                 + "?station=" + cfg.station_name
+                 + "&mac="     + WiFi.macAddress();
+
+  Serial.print("RemoteConfig: Abruf -> ");
+  Serial.println(url);
+
+  std::unique_ptr<WiFiClientSecure> secClient;
+  std::unique_ptr<WiFiClient>       plainClient;
+  WiFiClient* wc = nullptr;
+
+  if (cfg.api_https) {
+    secClient.reset(new WiFiClientSecure());
+    secClient->setInsecure();   // kein Zertifikat-Check (wie OTA)
+    wc = secClient.get();
+  } else {
+    plainClient.reset(new WiFiClient());
+    wc = plainClient.get();
+  }
+
+  HTTPClient http;
+  http.setTimeout(CFG_REMOTE_CONFIG_TIMEOUT);
+  http.begin(*wc, url);
+
+  if (strlen(cfg.api_user) > 0) {
+    http.setAuthorization(cfg.api_user, cfg.api_pass);
+  }
+
+  int code = http.GET();
+  if (code != HTTP_CODE_OK) {
+    Serial.printf("RemoteConfig: Fehler HTTP %d - lokale Werte behalten.\n", code);
+    http.end();
+    return;
+  }
+
+  String body = http.getString();
+  http.end();
+
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, body);
+  if (err || !doc["ok"].as<bool>()) {
+    Serial.print("RemoteConfig: JSON-Fehler - ");
+    Serial.println(err ? err.c_str() : "ok=false");
+    return;
+  }
+
+  bool changed = false;
+
+  // sleep_min
+  if (!doc["sleep_min"].isNull()) {
+    int v = doc["sleep_min"].as<int>();
+    if (v >= 1 && v != cfg.sleep_min) { cfg.sleep_min = v; changed = true; }
+  }
+  // temp_corr
+  if (!doc["temp_corr"].isNull()) {
+    float v = doc["temp_corr"].as<float>();
+    if (fabsf(v - cfg.temp_corr) > 0.01f) { cfg.temp_corr = v; changed = true; }
+  }
+  // elevation
+  if (!doc["elevation"].isNull()) {
+    int v = doc["elevation"].as<int>();
+    if (v >= 0 && v != cfg.elevation) { cfg.elevation = v; changed = true; }
+  }
+  // api_path (wirkt ab naechstem Boot; apiClient wird danach neu initialisiert)
+  if (!doc["api_path"].isNull()) {
+    const char* v = doc["api_path"].as<const char*>();
+    if (v && strncmp(v, cfg.api_path, sizeof(cfg.api_path)) != 0) {
+      strlcpy(cfg.api_path, v, sizeof(cfg.api_path));
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    saveConfig();
+    initApiClient();  // api_path koennte sich geaendert haben
+    Serial.println("RemoteConfig: Einstellungen uebernommen und ins EEPROM gespeichert.");
+  } else {
+    Serial.println("RemoteConfig: Keine Aenderungen.");
+  }
+}
+#endif  // USE_REMOTE_CONFIG
 
 static void logToAPI(const char* level, const char* code,
                      const char* message, const char* context = nullptr) {
@@ -537,6 +625,10 @@ void setup() {
   }
   Serial.println(" Wifi connected ok");
 
+  #if USE_REMOTE_CONFIG && USE_API
+  fetchRemoteConfig();   // Einstellungen vom Server abrufen (sleep_min, temp_corr, elevation, api_path)
+  #endif
+
   #if USE_OTA
   checkForOTA();   // Firmware-Update pruefen (vor NTP und Messung)
   #endif
@@ -883,7 +975,8 @@ float getTemperature() {
 void sendToAPI() {
   if (!apiClient) return;
   SWSResult result = apiClient
-    ->set("temperature",   adjusted_temp)
+    ->set("fw_version",    Version.c_str())
+    .set("temperature",    adjusted_temp)
     .set("humidity",       adjusted_humi)
     .set("dewpoint",       (float)DewpointTemperature)
     .set("dewpointspread", DewPointSpread)

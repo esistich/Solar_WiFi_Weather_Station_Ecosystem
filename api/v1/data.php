@@ -76,13 +76,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 	// Station bestimmen / anlegen
 	$slug    = $body['station_slug'] ?? null;
-	$station = resolveStation($db, $slug);
+	$mac     = normalizeMac($body['device_mac'] ?? null);
+	$station = resolveStation($db, $slug, $mac);
 	if (!$station) {
 		// Automatisch anlegen wenn noch keine Station existiert
 		$name = $body['station_name'] ?? ($slug ?? 'SWS Station 1');
-		$slug = $slug ?? 'sws-' . substr(md5($name . time()), 0, 6);
-		$db->prepare('INSERT INTO stations (slug, name) VALUES (?, ?)')->execute([$slug, $name]);
-		$station = ['id' => (int)$db->lastInsertId(), 'slug' => $slug, 'name' => $name];
+		$slug = $slug ?? ($mac ? 'sws-' . str_replace(':', '', substr($mac, -6)) : 'sws-' . substr(md5($name . time()), 0, 6));
+		$db->prepare('INSERT INTO stations (slug, name, mac) VALUES (?, ?, ?)')->execute([$slug, $name, $mac]);
+		$station = ['id' => (int)$db->lastInsertId(), 'slug' => $slug, 'name' => $name, 'mac' => $mac];
 	}
 
 	$deviceTs = isset($body['device_ts']) ? (int)$body['device_ts'] : null;
@@ -94,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 	// Reservierte Keys die keine Metriken sind, plus Felder die die API jetzt selbst berechnet
 	$skip = [
-		'station_slug', 'station_name', 'device_ts',
+		'station_slug', 'station_name', 'device_ts', 'device_mac',
 		// Folgende Felder wurden frueher vom Sketch gesendet, werden jetzt
 		// von calculateAndStoreZambretti() in der API berechnet:
 		'zambrettisays', 'zletter', 'trendinwords', 'accuracy',

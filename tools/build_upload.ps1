@@ -6,21 +6,22 @@ $src  = (Resolve-Path (Join-Path $PSScriptRoot "..\api")).Path
 $dest = (Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")).Path "upload")
 
 # Dateien/Muster die NICHT hochgeladen werden sollen
-$exclude = @(
-	"credentials.php",
-	"auth.php",
-	"db.php",
-	"jwt.php",
-	"*adminsdk*.json",
-	"*firebase*.json",
-	"*_diag.php",
-	"diag.php",
-	".setup_done",
-	"*.bin",
-	".gitkeep",
-	"firmware.bin"
+# Dateien/Muster die NICHT hochgeladen werden sollen.
+# excludeRelPaths: Pruefung gegen relativen Pfad (relativ zu api/).
+# excludeNames: Pruefung nur gegen Dateinamen (Wildcards).
+$excludeRelPaths = @(
+    "config\config.php"    # Zentrale Secrets-Datei – manuell auf Server ablegen
 )
-
+$excludeNames = @(
+    "*adminsdk*.json",     # Firebase Service-Account – niemals deployen
+    "*firebase*.json",
+    "*_diag.php",
+    "diag.php",
+    ".setup_done",
+    "*.bin",
+    ".gitkeep",
+    "firmware.bin"
+)
 # Zielordner anlegen falls nicht vorhanden
 if (-not (Test-Path $dest)) {
 	New-Item -ItemType Directory -Path $dest | Out-Null
@@ -33,11 +34,19 @@ $skipped = 0
 Get-ChildItem $src -Recurse -File | ForEach-Object {
 	$file = $_
 
-	# Ausschluss pruefen
-	$skip = $false
-	foreach ($pattern in $exclude) {
-		if ($file.Name -like $pattern) { $skip = $true; break }
-	}
+# Ausschluss pruefen
+$rel = $file.FullName.Substring($src.Length).TrimStart("\/").Replace("/", "\")
+$skip = $false
+# Relativer Pfad-Ausschluss (z.B. config\config.php)
+foreach ($p in $excludeRelPaths) {
+if ($rel -eq $p) { $skip = $true; break }
+}
+# Dateiname-Ausschluss (Wildcards)
+if (-not $skip) {
+foreach ($pattern in $excludeNames) {
+if ($file.Name -like $pattern) { $skip = $true; break }
+}
+}
 
 	# firmware/-Unterordner: nur .bin und .gitkeep ausschliessen,
 	# version.txt, .htaccess und Ordnerstruktur werden benoetigt damit die Hardware den richtigen Pfad findet
@@ -51,7 +60,7 @@ Get-ChildItem $src -Recurse -File | ForEach-Object {
 	}
 
 	# Zielpfad berechnen
-	$rel      = $file.FullName.Substring($src.Length).TrimStart('\')
+# $rel wurde bereits oben berechnet
 	$destFile = Join-Path $dest $rel
 	$destDir  = Split-Path $destFile
 
@@ -60,6 +69,14 @@ Get-ChildItem $src -Recurse -File | ForEach-Object {
 	}
 
 	Copy-Item $file.FullName $destFile -Force
+
+	# PHP-Dateien: UTF-8 BOM entfernen (Set-Content schreibt BOM, PHP verträgt das nicht)
+	if ($file.Extension -eq '.php') {
+		$b = [System.IO.File]::ReadAllBytes($destFile)
+		if ($b.Length -ge 3 -and $b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF) {
+			[System.IO.File]::WriteAllBytes($destFile, $b[3..($b.Length-1)])
+		}
+	}
 	$copied++
 }
 

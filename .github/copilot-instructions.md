@@ -5,6 +5,16 @@
 - Bei jeder Aktualisierung der SWSApiClient-Bibliothek (library/SWSApiClient/) soll der Agent die Bibliothek automatisch in den Arduino-Libraries-Ordner kopieren (C:/Users/EsIst/Documents/Arduino/libraries/SWSApiClient/).
 - Nach jeder Änderung an Dateien im api/-Ordner automatisch den upload/-Ordner aktualisieren mit: `robocopy api upload /E /XF "db.php" "auth.php" "*adminsdk*.json" /XD "upload" "homeassistant"` – homeassistant/ gehört nicht auf den Server.
 - Nach jeder Änderung immer das passende Script ausführen: (1) api/ → `tools/build_upload.ps1` → upload/, (2) sketch_sws/ + sketch_sws_display/ + library/SWSApiClient/ → `tools/sync_arduino.ps1` → Arduino-Sketchbook, (3) app/ (Flutter) → `flutter build apk --release` → APK. Das zentrale Script `tools/build_all.ps1` führt alle drei Schritte durch. Einzelne Teile können mit -Skip api, -Skip arduino oder -Skip app übersprungen werden.
+- SFTP-Deployment für Solar_WiFi_Weather_Station: Der vollständige Deploy-Ablauf ist IMMER:
+  1. `powershell -ExecutionPolicy Bypass -File tools/build_upload.ps1` → synchronisiert api/ → upload/ (ohne Secrets)
+  2. `powershell -ExecutionPolicy Bypass -File tools/deploy_server.ps1` → lädt upload/ per SFTP auf den Server hoch
+  Credentials stehen in `.env` im Repo-Root: SFTP_HOST=ssh.timm-sander.net, SFTP_PORT=22, SFTP_USER=timm-sander.net, SFTP_PASS aus .env, SFTP_REMOTE_PATH=webroots/www/sws/api.
+  Das Script nutzt Windows-OpenSSH `sftp`. Passwort-Auth hat früher funktioniert. Falls "Permission denied": SFTP-Passwort im Hoster-Panel prüfen und `.env` aktualisieren – NICHT nach SSH-Key suchen oder WinSCP installieren.
+  Niemals nach dem Passwort fragen – es steht in der .env. Beide Schritte immer selbst ausführen, den User nie danach fragen.
+- Bei Fehlern (z.B. HTTP 500) IMMER zuerst nur die zuletzt geänderten Dateien prüfen – nie sofort andere Dateien, den Server, .htaccess oder Konfigurationen untersuchen. Erst wenn die zuletzt geänderten Dateien als Ursache ausgeschlossen sind, weiter suchen.
+- Niemals die .htaccess des Webspace-Roots oder WordPress-Verzeichnisses anfassen oder ändern.
+- Für PHP-Fehlerdiagnose auf dem Webspace: wp-content/debug.log lesen (falls WP_DEBUG_LOG aktiv). Niemals .htaccess ändern um display_errors zu aktivieren.
+- Flutter und Android SDK sind direkt auf C:\ installiert (z.B. C:\flutter und C:\Android\Sdk\). Immer diese Pfade verwenden, nie danach suchen. ADB befindet sich unter `C:\Android\Sdk\platform-tools\adb.exe`.
 
 ---
 

@@ -131,6 +131,13 @@ public:
 	 */
 	void setStationName(const char* name);
 
+	/**
+	 * Geräte-MAC setzen – wird bei jedem send() als "device_mac"
+	 * mitgeschickt. Ermöglicht eindeutige Stationsidentifikation.
+	 * Übergabe: WiFi.macAddress().c_str()
+	 */
+	void setDeviceMac(const char* mac);
+
 	/** Interner Puffer manuell leeren. */
 	void clear();
 
@@ -141,6 +148,7 @@ private:
 	String _user;
 	String _pass;
 	String _stationName;
+	String _deviceMac;
 	bool   _useHttps;
 
 	JsonDocument _doc;

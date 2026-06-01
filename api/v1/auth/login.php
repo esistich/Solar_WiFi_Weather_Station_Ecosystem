@@ -8,8 +8,9 @@
 
 declare(strict_types=1);
 
-$db   = getDb();
-$body = json_decode(file_get_contents('php://input'), true) ?? [];
+$db  = getDb();
+$raw = file_get_contents('php://input');
+$body = json_decode($raw ?: '{}', true) ?? [];
 
 $email = trim($body['email']    ?? '');
 $pass  = trim($body['password'] ?? '');
@@ -27,4 +28,8 @@ if (!$user || !password_verify($pass, $user['password_hash'])) {
 }
 
 $token = jwtEncode(['sub' => $user['id'], 'email' => $user['email']]);
-sendJson(200, ['token' => $token]);
+sendJson(200, [
+	'id'    => (string)$user['id'],
+	'email' => $user['email'],
+	'token' => $token,
+]);

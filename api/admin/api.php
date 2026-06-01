@@ -1,7 +1,7 @@
 <?php
 /**
- * Admin-API – JSON-Endpunkt für das Dashboard.
- * Wird von index.php eingebunden (Session bereits geprüft).
+ * Admin-API â€“ JSON-Endpunkt fÃ¼r das Dashboard.
+ * Wird von index.php eingebunden (Session bereits geprÃ¼ft).
  */
 declare(strict_types=1);
 
@@ -29,7 +29,11 @@ match (true) {
 
 	// GET api/stations
 	$sub === 'stations' && $method === 'GET' => (function () use ($pdo) {
-		$rows = $pdo->query('SELECT id, slug, name, created_at FROM stations ORDER BY id')->fetchAll();
+		$rows = $pdo->query('SELECT id, slug, name, mac, settings, created_at FROM stations ORDER BY id')->fetchAll();
+		// settings als Objekt statt String zurÃ¼ckgeben
+		foreach ($rows as &$row) {
+			$row['settings'] = isset($row['settings']) ? (json_decode($row['settings'], true) ?? new stdClass()) : new stdClass();
+		}
 		adminJson(200, $rows);
 	})(),
 
@@ -44,10 +48,52 @@ match (true) {
 		adminJson(201, ['id' => (int)$pdo->lastInsertId(), 'slug' => $slug, 'name' => $name]);
 	})(),
 
+// PATCH api/stations  { id, name?, slug?, mac?, settings? }
+$sub === 'stations' && $method === 'PATCH' => (function () use ($pdo) {
+$d    = bodyJson();
+$id   = (int)($d['id'] ?? 0);
+$name = trim($d['name'] ?? '');
+$slug = trim(strtolower($d['slug'] ?? ''));
+if ($id < 1)      adminJson(422, ['error' => 'Ung\u00fcltige id']);
+if ($name === '') adminJson(422, ['error' => 'name darf nicht leer sein']);
+if ($slug === '') adminJson(422, ['error' => 'slug darf nicht leer sein']);
+if (!preg_match('/^[a-z0-9][a-z0-9\-]{0,62}$/', $slug))
+adminJson(422, ['error' => 'Slug ung\u00fcltig (nur a-z, 0-9, Bindestrich)']);
+$dup = $pdo->prepare('SELECT id FROM stations WHERE slug=? AND id!=? LIMIT 1');
+$dup->execute([$slug, $id]);
+if ($dup->fetch()) adminJson(409, ['error' => "Slug '$slug' ist bereits vergeben"]);
+// settings validieren und als JSON-String speichern
+$settingsJson = null;
+if (array_key_exists('settings', $d) && $d['settings'] !== null) {
+$s = $d['settings'];
+if (!is_array($s) && !is_object($s)) adminJson(422, ['error' => 'settings muss ein Objekt sein']);
+$s = (array)$s;
+$allowed = ['sleep_min', 'temp_corr', 'elevation', 'api_path'];
+$s = array_intersect_key($s, array_flip($allowed));
+$settingsJson = json_encode($s, JSON_UNESCAPED_UNICODE);
+}
+// MAC optional aktualisieren (null = leeren, nicht gesetzt = unver\u00e4ndert)
+if (array_key_exists('mac', $d)) {
+$mac = $d['mac'] ? strtolower(trim($d['mac'])) : null;
+if ($settingsJson !== null) {
+$pdo->prepare('UPDATE stations SET name=?, slug=?, mac=?, settings=? WHERE id=?')->execute([$name, $slug, $mac, $settingsJson, $id]);
+} else {
+$pdo->prepare('UPDATE stations SET name=?, slug=?, mac=? WHERE id=?')->execute([$name, $slug, $mac, $id]);
+}
+} else {
+if ($settingsJson !== null) {
+$pdo->prepare('UPDATE stations SET name=?, slug=?, settings=? WHERE id=?')->execute([$name, $slug, $settingsJson, $id]);
+} else {
+$pdo->prepare('UPDATE stations SET name=?, slug=? WHERE id=?')->execute([$name, $slug, $id]);
+}
+}
+adminJson(200, ['ok' => true, 'id' => $id, 'name' => $name, 'slug' => $slug]);
+})(),
+
 	// DELETE api/stations?id=X
 	$sub === 'stations' && $method === 'DELETE' => (function () use ($pdo) {
 		$id = (int)($_GET['id'] ?? 0);
-		if ($id < 1) adminJson(422, ['error' => 'Ungültige id']);
+		if ($id < 1) adminJson(422, ['error' => 'UngÃ¼ltige id']);
 		$pdo->prepare('DELETE FROM stations WHERE id=?')->execute([$id]);
 		adminJson(200, ['ok' => true]);
 	})(),
@@ -87,14 +133,49 @@ match (true) {
 
 	// GET api/users
 	$sub === 'users' && $method === 'GET' => (function () use ($pdo) {
-		$rows = $pdo->query('SELECT id, email, created_at FROM users ORDER BY id')->fetchAll();
+		$rows = $pdo->query('SELECT id, email, role, created_at FROM users ORDER BY id')->fetchAll();
 		adminJson(200, $rows);
 	})(),
 
-	// DELETE api/users?id=X
+	// PATCH api/users  { id, email?, role?, password? }
+	$sub === 'users' && $method === 'PATCH' => (function () use ($pdo) {
+		$d        = bodyJson();
+		$id       = (int)($d['id'] ?? 0);
+		$email    = isset($d['email'])    ? trim($d['email'])    : null;
+		$role     = isset($d['role'])     ? trim($d['role'])     : null;
+		$password = isset($d['password']) ? trim($d['password']) : null;
+		if ($id < 1) adminJson(422, ['error' => 'UngÃ¼ltige id']);
+		if ($email !== null) {
+			if (!filter_var($email, FILTER_VALIDATE_EMAIL))
+				adminJson(422, ['error' => 'UngÃ¼ltige E-Mail-Adresse']);
+			$dup = $pdo->prepare('SELECT id FROM users WHERE email=? AND id!=? LIMIT 1');
+			$dup->execute([$email, $id]);
+			if ($dup->fetch()) adminJson(409, ['error' => 'E-Mail bereits vergeben']);
+			$pdo->prepare('UPDATE users SET email=? WHERE id=?')->execute([$email, $id]);
+		}
+		if ($role !== null) {
+			if (!in_array($role, ['user', 'admin'], true))
+				adminJson(422, ['error' => 'Rolle muss user oder admin sein']);
+			$pdo->prepare('UPDATE users SET role=? WHERE id=?')->execute([$role, $id]);
+		}
+		if ($password !== null) {
+			if (strlen($password) < 8)
+				adminJson(422, ['error' => 'Passwort muss mindestens 8 Zeichen lang sein']);
+			$hash = password_hash($password, PASSWORD_BCRYPT);
+			$pdo->prepare('UPDATE users SET password_hash=? WHERE id=?')->execute([$hash, $id]);
+		}
+		adminJson(200, ['ok' => true, 'id' => $id]);
+	})(),
+
+	// DELETE api/users?id=X  (Admin-Account nicht lÃ¶schbar)
 	$sub === 'users' && $method === 'DELETE' => (function () use ($pdo) {
 		$id = (int)($_GET['id'] ?? 0);
-		if ($id < 1) adminJson(422, ['error' => 'Ungültige id']);
+		if ($id < 1) adminJson(422, ['error' => 'UngÃ¼ltige id']);
+		$row = $pdo->prepare('SELECT role FROM users WHERE id=? LIMIT 1');
+		$row->execute([$id]);
+		$r = $row->fetch();
+		if (!$r) adminJson(404, ['error' => 'Benutzer nicht gefunden']);
+		if ($r['role'] === 'admin') adminJson(403, ['error' => 'Admin-Account kann nicht gelÃ¶scht werden']);
 		$pdo->prepare('DELETE FROM users WHERE id=?')->execute([$id]);
 		adminJson(200, ['ok' => true]);
 	})(),
@@ -105,7 +186,7 @@ match (true) {
 		adminJson(200, $rows);
 	})(),
 
-	// POST api/invites  → neuen Code erzeugen
+	// POST api/invites  â†’ neuen Code erzeugen
 	$sub === 'invites' && $method === 'POST' => (function () use ($pdo) {
 		$code = bin2hex(random_bytes(5));
 		$pdo->prepare('INSERT INTO invite_codes (code) VALUES (?)')->execute([$code]);
@@ -115,9 +196,67 @@ match (true) {
 	// DELETE api/invites?id=X
 	$sub === 'invites' && $method === 'DELETE' => (function () use ($pdo) {
 		$id = (int)($_GET['id'] ?? 0);
-		if ($id < 1) adminJson(422, ['error' => 'Ungültige id']);
+		if ($id < 1) adminJson(422, ['error' => 'UngÃ¼ltige id']);
 		$pdo->prepare('DELETE FROM invite_codes WHERE id=?')->execute([$id]);
 		adminJson(200, ['ok' => true]);
+	})(),
+
+	// GET api/history?station=slug&hours=24&metrics=temperature,humidity
+	$sub === 'history' && $method === 'GET' => (function () use ($pdo) {
+		$slug    = trim($_GET['station'] ?? '');
+		$hours   = min(720, max(1, (int)($_GET['hours'] ?? 24)));
+		$metrics = array_filter(array_map('trim', explode(',', $_GET['metrics'] ?? '')));
+		if (empty($metrics)) {
+			$metrics = ['temperature', 'pool_temperature', 'humidity', 'rel_pressure', 'battery_pct'];
+		}
+
+		if ($slug !== '') {
+			$st = $pdo->prepare('SELECT id FROM stations WHERE slug=?');
+			$st->execute([$slug]);
+		} else {
+			$st = $pdo->query('SELECT id FROM stations ORDER BY id LIMIT 1');
+		}
+		$stationId = (int)($st->fetchColumn() ?: 0);
+		if ($stationId === 0) adminJson(404, ['error' => 'Station nicht gefunden']);
+
+		// Messzeitpunkte im Zeitfenster laden
+		$placeholders = implode(',', array_fill(0, count($metrics), '?'));
+		$params = [$stationId, $hours];
+		$rows = $pdo->prepare("
+			SELECT m.created_at, mv.metric_key, mv.value
+			FROM measurements m
+			JOIN measurement_values mv ON mv.measurement_id = m.id
+			WHERE m.station_id = ?
+			  AND m.created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? HOUR)
+			  AND mv.metric_key IN ($placeholders)
+			ORDER BY m.created_at ASC
+		");
+		$rows->execute(array_merge($params, $metrics));
+		$raw = $rows->fetchAll();
+
+		// Metrik-Labels laden
+		$lblStmt = $pdo->prepare("SELECT metric_key, label, unit FROM metric_definitions WHERE metric_key IN ($placeholders)");
+		$lblStmt->execute($metrics);
+		$defs = [];
+		foreach ($lblStmt->fetchAll() as $d) {
+			$defs[$d['metric_key']] = ['label' => $d['label'], 'unit' => $d['unit']];
+		}
+
+		// Daten nach metric_key gruppieren
+		$series = [];
+		foreach ($raw as $r) {
+			$key = $r['metric_key'];
+			if (!isset($series[$key])) {
+				$series[$key] = [
+					'label'  => $defs[$key]['label'] ?? $key,
+					'unit'   => $defs[$key]['unit']  ?? '',
+					'points' => [],
+				];
+			}
+			$series[$key]['points'][] = ['t' => $r['created_at'], 'v' => (float)$r['value']];
+		}
+
+		adminJson(200, ['hours' => $hours, 'series' => array_values($series)]);
 	})(),
 
 	// GET api/live?station=slug
@@ -158,7 +297,7 @@ match (true) {
 		$adminPw = trim($d['admin_password'] ?? '');
 		if ($adminPw === '')                                        adminJson(400, ['error' => 'admin_password fehlt']);
 		if (!defined('ADMIN_PASS_HASH') || !password_verify($adminPw, ADMIN_PASS_HASH))
-			adminJson(403, ['error' => 'Ungültiges Admin-Passwort']);
+			adminJson(403, ['error' => 'UngÃ¼ltiges Admin-Passwort']);
 
 		$newApiUser   = trim($d['api_user']   ?? '');
 		$newApiPass   = trim($d['api_pass']   ?? '');
@@ -168,9 +307,9 @@ match (true) {
 		if ($newApiUser === '' && $newApiPass === '' && $newJwtSecret === '' && $newAdminPass === '')
 			adminJson(400, ['error' => 'Mindestens ein Feld (api_user, api_pass, jwt_secret, admin_pass) muss angegeben sein']);
 
-		if ($newApiPass   !== '' && strlen($newApiPass)   < 12) adminJson(400, ['error' => 'api_pass muss ≥ 12 Zeichen haben']);
-		if ($newAdminPass !== '' && strlen($newAdminPass) < 12) adminJson(400, ['error' => 'admin_pass muss ≥ 12 Zeichen haben']);
-		if ($newJwtSecret !== '' && strlen($newJwtSecret) < 32) adminJson(400, ['error' => 'jwt_secret muss ≥ 32 Zeichen haben']);
+		if ($newApiPass   !== '' && strlen($newApiPass)   < 12) adminJson(400, ['error' => 'api_pass muss â‰¥ 12 Zeichen haben']);
+		if ($newAdminPass !== '' && strlen($newAdminPass) < 12) adminJson(400, ['error' => 'admin_pass muss â‰¥ 12 Zeichen haben']);
+		if ($newJwtSecret !== '' && strlen($newJwtSecret) < 32) adminJson(400, ['error' => 'jwt_secret muss â‰¥ 32 Zeichen haben']);
 
 		$esc = static fn(string $v): string => str_replace(["\\", "'"], ["\\\\", "\\'"], $v);
 
@@ -181,7 +320,7 @@ match (true) {
 		$finalAdminUser = defined('ADMIN_USER')? ADMIN_USER     : 'admin';
 		$finalAdminHash = $newAdminPass !== '' ? $esc(password_hash($newAdminPass, PASSWORD_BCRYPT)) : $esc(ADMIN_PASS_HASH);
 
-		$php = "<?php\n/**\n * credentials.php – generiert am " . gmdate('Y-m-d H:i:s') . " UTC\n * NICHT committen!\n */\n\n"
+		$php = "<?php\n/**\n * credentials.php â€“ generiert am " . gmdate('Y-m-d H:i:s') . " UTC\n * NICHT committen!\n */\n\n"
 			. "define('API_USER',        '{$esc($finalApiUser)}');\n"
 			. "define('API_PASS',        '{$esc($finalApiPass)}');\n"
 			. "define('JWT_SECRET_VALUE','{$esc($finalJwt)}');\n"
@@ -241,9 +380,7 @@ match (true) {
 		adminJson(200, $rows);
 	})(),
 
-	default => adminJson(404, ['error' => 'Unbekannte Admin-Aktion']),
-
-	// GET api/ota  – alle Sketch-Ordner mit Version und Firmware-Info
+	// GET api/ota  â€“ alle Sketch-Ordner mit Version und Firmware-Info
 	$sub === 'ota' && $method === 'GET' => (function () {
 		$base = dirname(__DIR__) . '/ota/firmware';
 		$list = [];
@@ -289,4 +426,34 @@ match (true) {
 		if (!move_uploaded_file($tmp, $dest)) adminJson(500, ['error' => 'Fehler beim Speichern']);
 		adminJson(200, ['ok' => true, 'sketch' => $sketch, 'size' => filesize($dest)]);
 	})(),
+
+	// POST api/migrate â€“ role-Spalte ergÃ¤nzen + Admin-User anlegen falls keiner existiert
+	$sub === 'migrate' && $method === 'POST' => (function () use ($pdo) {
+		$log = [];
+		// role-Spalte ergÃ¤nzen falls noch nicht vorhanden
+		try {
+			$pdo->exec("ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user'");
+			$log[] = 'Spalte role angelegt';
+		} catch (\PDOException $e) {
+			$log[] = 'Spalte role bereits vorhanden (Ã¼bersprungen)';
+		}
+		// PrÃ¼fen ob Admin existiert
+		$existing = $pdo->query("SELECT id FROM users WHERE role='admin' LIMIT 1")->fetchColumn();
+		if (!$existing) {
+			$d     = bodyJson();
+			$email = trim($d['email']    ?? 'admin@local');
+			$pass  = trim($d['password'] ?? '');
+			if ($pass === '') adminJson(422, ['error' => 'password fÃ¼r Admin-Anlage erforderlich', 'log' => $log]);
+			if (strlen($pass) < 8) adminJson(422, ['error' => 'Passwort mind. 8 Zeichen', 'log' => $log]);
+			$hash = password_hash($pass, PASSWORD_BCRYPT);
+			$pdo->prepare("INSERT INTO users (email, password_hash, role) VALUES (?,?,'admin')")->execute([$email, $hash]);
+			$log[] = "Admin-User '$email' angelegt";
+		} else {
+			$log[] = 'Admin-User bereits vorhanden';
+		}
+		adminJson(200, ['ok' => true, 'log' => $log]);
+	})(),
+
+	default => adminJson(404, ['error' => 'Unbekannte Admin-Aktion']),
 };
+

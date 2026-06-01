@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../services/services.dart';
 import '../widgets/widgets.dart';
+import 'settings_screen.dart';
 
 /// Detail-Ansicht eines Geräts: aktuelle Werte + History-Chart.
 class DetailScreen extends StatefulWidget {
@@ -126,6 +127,15 @@ class _DetailScreenState extends State<DetailScreen> {
 	});
 	try {
 	  final auth = context.read<AuthService>();
+	  // Verlauf erfordert JWT – nicht eingeloggt → Hinweis statt 401
+	  if (!auth.isLoggedIn) {
+		setState(() {
+		  _loadingHistory = false;
+		  _historyError = null;
+		  _history = [];
+		});
+		return;
+	  }
 	  final data = await _api.fetchHistory(
 		_device,
 		hours: _selectedHours,
@@ -201,6 +211,21 @@ class _DetailScreenState extends State<DetailScreen> {
 				child: Text(
 				  _historyError!,
 				  style: const TextStyle(color: Colors.red),
+				),
+			  )
+			else if (_history.isEmpty)
+			  Padding(
+				padding: const EdgeInsets.symmetric(vertical: 24),
+				child: _LoginHint(
+				  onLogin: () async {
+					await Navigator.push<void>(
+					  context,
+					  MaterialPageRoute(
+						builder: (_) => const SettingsScreen(),
+					  ),
+					);
+					_loadHistory();
+				  },
 				),
 			  )
 			else ...[
@@ -450,6 +475,49 @@ class _DeviceInfo extends StatelessWidget {
 		subtitle: Text(
 		  device.apiUrl,
 		  style: const TextStyle(fontSize: 11),
+		),
+	  ),
+	);
+  }
+}
+
+class _LoginHint extends StatelessWidget {
+  final VoidCallback onLogin;
+  const _LoginHint({required this.onLogin});
+
+  @override
+  Widget build(BuildContext context) {
+	return Card(
+	  child: Padding(
+		padding: const EdgeInsets.all(16),
+		child: Row(
+		  children: [
+			const Icon(Icons.lock_outline, color: Colors.grey),
+			const SizedBox(width: 12),
+			Expanded(
+			  child: Column(
+				crossAxisAlignment: CrossAxisAlignment.start,
+				children: [
+				  Text(
+					'Verlauf erfordert Anmeldung',
+					style: Theme.of(context).textTheme.bodyMedium,
+				  ),
+				  const SizedBox(height: 4),
+				  Text(
+					'Bitte melde dich in den Einstellungen an.',
+					style: Theme.of(context)
+						.textTheme
+						.bodySmall
+						?.copyWith(color: Colors.grey),
+				  ),
+				],
+			  ),
+			),
+			TextButton(
+			  onPressed: onLogin,
+			  child: const Text('Anmelden'),
+			),
+		  ],
 		),
 	  ),
 	);

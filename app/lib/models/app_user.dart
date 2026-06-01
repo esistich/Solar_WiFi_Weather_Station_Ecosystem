@@ -11,9 +11,9 @@ class AppUser {
   });
 
   factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
-		id: json['id'] as String,
-		email: json['email'] as String,
-		token: json['token'] as String,
+		id: json['id']?.toString() ?? '',
+		email: json['email']?.toString() ?? '',
+		token: json['token']?.toString() ?? '',
 	  );
 
   Map<String, dynamic> toJson() => {

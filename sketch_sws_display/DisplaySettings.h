@@ -18,7 +18,7 @@
 
 // ------ API -------------------------------------------------
 #define CFG_DEFAULT_API_HOST    "timm-sander.net"
-#define CFG_DEFAULT_API_PATH    "/swsapi/data.php"
+#define CFG_DEFAULT_API_PATH    "/sws/api/v1/data"
 #define CFG_DEFAULT_API_HTTPS   true
 
 // ------ Aktualisierungsintervall ----------------------------
@@ -62,3 +62,6 @@
 #define CFG_OTA_BASE_PATH     "/sws/api/ota/firmware" // Basispfad auf dem API-Host
 #define CFG_OTA_SKETCH_ID     "sws_display"
 #define CFG_OTA_TIMEOUT_MS    5000
+
+// Firmware-Version dieses Sketches (muss bei jedem Release manuell erhoehen)
+const String FW_VERSION = "2.0";

@@ -441,13 +441,13 @@ static void fetchData() {
         WiFiClientSecure client;
         client.setInsecure();
         HTTPClient http;
-        http.begin(client, String("https://") + cfg.api_host + cfg.api_path);
+        http.begin(client, String("https://") + cfg.api_host + cfg.api_path + "?fw_version=" + FW_VERSION);
         http.setTimeout(8000);
         processHttpResponse(http);
     } else {
         WiFiClient client;
         HTTPClient http;
-        http.begin(client, String("http://") + cfg.api_host + cfg.api_path);
+        http.begin(client, String("http://") + cfg.api_host + cfg.api_path + "?fw_version=" + FW_VERSION);
         http.setTimeout(8000);
         processHttpResponse(http);
     }
@@ -522,11 +522,10 @@ static void checkForOTA(const DisplayConfig& c) {
   http.end();
   remoteVer.trim();
 
-  // Lokale Version aus Sketch-Kommentar-Define
-  const String localVer = F("2.0");
-  Serial.printf("OTA: lokal=%s  server=%s\n", localVer.c_str(), remoteVer.c_str());
+  // Lokale Version aus DisplaySettings.h
+  Serial.printf("OTA: lokal=%s  server=%s\n", FW_VERSION.c_str(), remoteVer.c_str());
 
-  if (remoteVer == localVer) {
+  if (remoteVer == FW_VERSION) {
     Serial.println("OTA: Firmware aktuell - kein Update noetig.");
     return;
   }

@@ -50,4 +50,8 @@ $db->prepare('UPDATE invite_codes SET used_at = NOW(), used_by = ? WHERE id = ?'
    ->execute([$userId, $invRow['id']]);
 
 $token = jwtEncode(['sub' => $userId, 'email' => $email]);
-sendJson(200, ['token' => $token]);
+sendJson(200, [
+	'id'    => (string)$userId,
+	'email' => $email,
+	'token' => $token,
+]);

@@ -71,10 +71,28 @@ const String Version = "2.7.2";
 #define CFG_DEFAULT_API_ENABLED   true
 #define CFG_DEFAULT_API_HTTPS     true
 #define CFG_DEFAULT_API_HOST      "timm-sander.net"
-#define CFG_DEFAULT_API_PATH      "/sws/api/data.php"
+#define CFG_DEFAULT_API_PATH      "/sws/api/v1/data"
 #define CFG_DEFAULT_API_PORT      443
 #define CFG_DEFAULT_API_USER      "NAy1b4GpuS3dEvej"
 #define CFG_DEFAULT_API_PASS      "REDACTED_API_PASS"
+
+/****** Remote-Config (automatischer Abruf von Einstellungen) **************
+ * Beim Boot wird nach dem WiFi-Connect einmalig GET /v1/config aufgerufen.
+ * Zurückgelieferte Felder (sleep_min, temp_corr, elevation, api_path)
+ * überschreiben die EEPROM-Werte für die aktuelle und künftige Messzyklen.
+ * Das EEPROM wird nur neu geschrieben wenn sich ein Wert tatsächlich ändert.
+ *
+ * USE_REMOTE_CONFIG = 0  ->  deaktiviert, nur EEPROM/Compile-Defaults
+ * USE_REMOTE_CONFIG = 1  ->  aktiv (empfohlen)
+ *
+ * CFG_REMOTE_CONFIG_PATH: Pfad zum /v1/config-Endpunkt.
+ * Dieser Pfad ist der feste Bootstrap-Pfad und wird nie per Remote-Config
+ * selbst verändert – er muss nach einer API-Umstrukturierung manuell
+ * oder per OTA-Update angepasst werden.
+ ****************************************************************************/
+#define USE_REMOTE_CONFIG         1
+#define CFG_REMOTE_CONFIG_PATH    "/sws/api/v1/config"
+#define CFG_REMOTE_CONFIG_TIMEOUT 5000    // Max. Wartezeit in ms
 
 /****** OTA-Update (Over-the-Air Firmware) *********************************
  * Beim Boot wird einmalig geprueft ob eine neue Firmware verfuegbar ist.

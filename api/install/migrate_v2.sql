@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS `stations` (
   `slug`       VARCHAR(64)   NOT NULL UNIQUE COMMENT 'URL-freundlicher Bezeichner (z.B. sws-garten)',
   `name`       VARCHAR(128)  NOT NULL DEFAULT 'SWS Station',
   `api_key`    VARCHAR(64)   NULL     COMMENT 'Zukünftig: stationsspezifischer API-Key',
+  `settings`   JSON          NULL     COMMENT 'Remote-Config: sleep_min, temp_corr, elevation, api_path',
   `created_at` TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_slug` (`slug`)
@@ -120,6 +121,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `email`         VARCHAR(255) NOT NULL UNIQUE,
   `password_hash` VARCHAR(255) NOT NULL,
+  `role`          ENUM('user','admin') NOT NULL DEFAULT 'user',
   `created_at`    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -148,6 +150,12 @@ CREATE TABLE IF NOT EXISTS `invite_codes` (
 -- Alte Spalten in measurements können nach Verifikation
 -- mit ALTER TABLE measurements DROP COLUMN ... entfernt werden.
 -- ============================================================
+
+-- ----------------------------------------------------------
+-- Bestehende users-Tabelle: role-Spalte nachrüsten (idempotent)
+-- ----------------------------------------------------------
+ALTER TABLE `users`
+  ADD COLUMN IF NOT EXISTS `role` ENUM('user','admin') NOT NULL DEFAULT 'user' AFTER `password_hash`;
 
 -- ----------------------------------------------------------
 -- Nachträgliche Korrekturen (idempotent ausführbar)
@@ -180,8 +188,23 @@ ALTER TABLE `measurements`
   MODIFY COLUMN `dewpoint_spread` DECIMAL(5,2) NULL;
 
 -- ----------------------------------------------------------
--- Migration v2.1 – station_errors (Fehler-Log der Stationen)
+-- Migration v2.2 – role-Spalte in users (idempotent)
+-- Bestehende Installationen: role-Spalte nachträglich hinzufügen.
+-- Bereits vorhandene Admins müssen danach im Admin-Dashboard
+-- auf role='admin' gesetzt werden.
 -- ----------------------------------------------------------
+ALTER TABLE `users`
+  ADD COLUMN IF NOT EXISTS `role` ENUM('user','admin') NOT NULL DEFAULT 'user'
+  AFTER `password_hash`;
+
+-- ----------------------------------------------------------
+-- Migration v2.3 – Remote-Config: settings-Spalte in stations (idempotent)
+-- ----------------------------------------------------------
+ALTER TABLE `stations`
+  ADD COLUMN IF NOT EXISTS `settings` JSON NULL
+  COMMENT 'Remote-Config: sleep_min, temp_corr, elevation, api_path'
+  AFTER `api_key`;
+
 CREATE TABLE IF NOT EXISTS `station_errors` (
   `id`         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `station_id` INT UNSIGNED    NOT NULL,

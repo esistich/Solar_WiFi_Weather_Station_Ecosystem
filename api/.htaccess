@@ -19,8 +19,8 @@ RewriteRule ^v1/(.*)$ v1/index.php [QSA,L]
 
 # ---- Zugriffsschutz ----
 
-# auth.php und db.php vor Direktzugriff schützen
-<FilesMatch "^(auth|db)\.php$">
+# auth.php, db.php und credentials.php vor Direktzugriff schützen
+<FilesMatch "^(auth|db|credentials)\.php$">
 	Require all denied
 </FilesMatch>
 
