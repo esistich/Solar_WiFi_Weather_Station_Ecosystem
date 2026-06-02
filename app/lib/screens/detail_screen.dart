@@ -156,50 +156,88 @@ class _DetailScreenState extends State<DetailScreen> {
 	final loading = provider.isLoading(_device.id);
 
 	return Scaffold(
-	  appBar: AppBar(
-		title: Text(_device.name),
-		actions: [
-		  IconButton(
-			icon: const Icon(Icons.edit_outlined),
-			tooltip: 'Station umbenennen',
-			onPressed: _showRenameDialog,
-		  ),
-		  IconButton(
-			icon: const Icon(Icons.refresh),
-			onPressed: () {
-			  provider.refreshDevice(_device.id);
-			  _loadHistory();
-			},
-		  ),
-		],
-	  ),
 	  body: RefreshIndicator(
 		onRefresh: () async {
 		  provider.refreshDevice(_device.id);
 		  await _loadHistory();
 		},
-		child: ListView(
-		  padding: const EdgeInsets.all(16),
-		  children: [
-			// Aktuelle Werte
-			_CurrentValues(
-			  measurement: measurement,
-			  loading: loading,
-			  error: provider.errorFor(_device.id),
+		child: CustomScrollView(
+		  slivers: [
+			// ── Gradient SliverAppBar ──────────────────────────────────────
+			SliverAppBar(
+			  expandedHeight: 160,
+			  pinned: true,
+			  flexibleSpace: FlexibleSpaceBar(
+				titlePadding: const EdgeInsets.fromLTRB(16, 0, 48, 12),
+				title: Text(
+				  _device.name,
+				  style: const TextStyle(
+					color: Colors.white,
+					fontSize: 18,
+					fontWeight: FontWeight.bold,
+					shadows: [Shadow(blurRadius: 4, color: Colors.black38)],
+				  ),
+				),
+				background: Container(
+				  decoration: BoxDecoration(
+					gradient: WeatherUtils.gradientForZambretti(
+					  measurement?.zambretti ?? '',
+					),
+				  ),
+				  child: Align(
+					alignment: Alignment.centerRight,
+					child: Padding(
+					  padding: const EdgeInsets.only(right: 20, bottom: 20),
+					  child: Icon(
+						WeatherUtils.iconForZambretti(
+						  measurement?.zambretti ?? '',
+						),
+						color: Colors.white30,
+						size: 80,
+					  ),
+					),
+				  ),
+				),
+			  ),
+			  actions: [
+				IconButton(
+				  icon: const Icon(Icons.edit_outlined, color: Colors.white),
+				  tooltip: 'Station umbenennen',
+				  onPressed: _showRenameDialog,
+				),
+				IconButton(
+				  icon: const Icon(Icons.refresh, color: Colors.white),
+				  onPressed: () {
+					provider.refreshDevice(_device.id);
+					_loadHistory();
+				  },
+				),
+			  ],
 			),
-			const SizedBox(height: 24),
+			// ── Inhalt als Sliver ──────────────────────────────────────────
+			SliverPadding(
+			  padding: const EdgeInsets.all(16),
+			  sliver: SliverList(
+				delegate: SliverChildListDelegate([
+				  // Aktuelle Werte
+				  _CurrentValues(
+					measurement: measurement,
+					loading: loading,
+					error: provider.errorFor(_device.id),
+				  ),
+				  const SizedBox(height: 24),
 
-			// Zeitraum-Auswahl
-			_PeriodSelector(
-			  selected: _selectedHours,
-			  onChanged: (h) {
-				setState(() => _selectedHours = h);
-				_loadHistory();
-			  },
-			),
-			const SizedBox(height: 16),
+				  // Zeitraum-Auswahl
+				  _PeriodSelector(
+					selected: _selectedHours,
+					onChanged: (h) {
+					  setState(() => _selectedHours = h);
+					  _loadHistory();
+					},
+				  ),
+				  const SizedBox(height: 16),
 
-			// Charts
+				  // Charts
 			if (_loadingHistory)
 			  const SizedBox(
 				height: 100,
@@ -292,16 +330,19 @@ class _DetailScreenState extends State<DetailScreen> {
 				  ),
 				],
 
-			const SizedBox(height: 24),
+							const SizedBox(height: 24),
 
-			// API-Endpunkt Info
-			_DeviceInfo(device: _device),
-		  ],
-		),
-	  ),
-	);
-  }
-}
+							  // API-Endpunkt Info
+							  _DeviceInfo(device: _device),
+							]),
+						  ),
+						),
+					  ],
+					),
+				  ),
+				);
+			  }
+			}
 
 class _CurrentValues extends StatelessWidget {
   final Measurement? measurement;

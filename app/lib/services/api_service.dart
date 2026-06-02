@@ -24,23 +24,27 @@ if (token == null || token.isEmpty) return {};
 return {HttpHeaders.authorizationHeader: 'Bearer $token'};
   }
 
-  /// Laedt den aktuellen Messwert (GET /v1/data – oeffentlich).
+ /// Laedt den aktuellen Messwert (GET /v1/data – oeffentlich).
   Future<Measurement> fetchLatest(Device device) async {
-final uri = Uri.parse(device.apiUrl);
-final response = await _client
-.get(uri, headers: _basicAuthHeaders(device))
-.timeout(const Duration(seconds: 10));
+    // Station-Slug als Query-Parameter mitsenden damit die API die richtige Station zurueckgibt
+    final base = Uri.parse(device.apiUrl);
+    final uri = device.stationSlug.isNotEmpty
+        ? base.replace(queryParameters: {'station': device.stationSlug})
+        : base;
+    final response = await _client
+        .get(uri, headers: _basicAuthHeaders(device))
+        .timeout(const Duration(seconds: 10));
 
-if (response.statusCode != 200) {
-  throw ApiException('HTTP ${response.statusCode}', uri.toString());
-}
+    if (response.statusCode != 200) {
+      throw ApiException('HTTP ${response.statusCode}', uri.toString());
+    }
 
-final json = jsonDecode(response.body);
-if (json is! Map<String, dynamic>) {
-  throw ApiException('Ungueltiges JSON-Format', uri.toString());
-}
+    final json = jsonDecode(response.body);
+    if (json is! Map<String, dynamic>) {
+      throw ApiException('Ungueltiges JSON-Format', uri.toString());
+    }
 
-return Measurement.fromJson(json);
+    return Measurement.fromJson(json);
   }
 
   /// Laedt Verlaufsdaten (GET /v1/history – JWT Bearer erforderlich).

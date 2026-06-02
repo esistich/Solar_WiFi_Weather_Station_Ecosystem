@@ -19,11 +19,11 @@ if (!$email || !$pass) {
 	sendJson(400, ['error' => 'email und password erforderlich']);
 }
 
-$stmt = $db->prepare('SELECT id, email, password_hash FROM users WHERE email = ? LIMIT 1');
+$stmt = $db->prepare('SELECT id, email, password FROM users WHERE email = ? LIMIT 1');
 $stmt->execute([$email]);
 $user = $stmt->fetch();
 
-if (!$user || !password_verify($pass, $user['password_hash'])) {
+if (!$user || !password_verify($pass, $user['password'])) {
 	sendJson(401, ['error' => 'Ungültige Anmeldedaten']);
 }
 

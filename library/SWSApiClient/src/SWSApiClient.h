@@ -36,7 +36,7 @@
 
 // Maximale JSON-Payload-Groesse in Bytes
 #ifndef SWS_JSON_BUFFER
-  #define SWS_JSON_BUFFER 768
+  #define SWS_JSON_BUFFER 1024
 #endif
 
 /**

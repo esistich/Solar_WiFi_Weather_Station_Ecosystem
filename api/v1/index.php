@@ -69,6 +69,7 @@ $routes = [
 	'POST /invite/create'  => __DIR__ . '/auth/invite_create.php',
 	'GET /invite/list'     => __DIR__ . '/auth/invite_list.php',
 	'GET /metrics'              => __DIR__ . '/metrics.php',
+	'PATCH /admin/stations'     => __DIR__ . '/admin/stations.php',
 ];
 
 $key = "$method $uri";

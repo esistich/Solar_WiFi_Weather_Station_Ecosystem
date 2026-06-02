@@ -28,24 +28,25 @@ function bodyJson(): array
 match (true) {
 
 	// GET api/stations
-$sub === 'stations' && $method === 'GET' => (function () use ($pdo) {
-// Letzte Aktivitaet und Firmware-Version aus letzter Messung hinzufuegen
-$rows = $pdo->query(
-'SELECT s.id, s.slug, s.name, s.mac, s.settings, s.created_at,
-        m.created_at   AS last_seen,
-        mv.value       AS fw_version
- FROM stations s
- LEFT JOIN measurements m ON m.id = (
-     SELECT id FROM measurements WHERE station_id = s.id ORDER BY id DESC LIMIT 1
- )
- LEFT JOIN measurement_values mv ON mv.measurement_id = m.id AND mv.metric_key = \'fw_version\'
- ORDER BY s.id'
-)->fetchAll();
-foreach ($rows as &$row) {
-$row['settings'] = isset($row['settings']) ? (json_decode($row['settings'], true) ?? new stdClass()) : new stdClass();
-}
-adminJson(200, $rows);
-})(),
+	$sub === 'stations' && $method === 'GET' => (function () use ($pdo) {
+		try {
+			$rows = $pdo->query(
+				'SELECT s.id, s.slug, s.name, s.mac, s.settings, s.created_at,'
+				. ' m.created_at AS last_seen,'
+				. ' mv.value AS fw_version'
+				. ' FROM stations s'
+				. ' LEFT JOIN measurements m ON m.id = (SELECT id FROM measurements WHERE station_id = s.id ORDER BY id DESC LIMIT 1)'
+				. ' LEFT JOIN measurement_values mv ON mv.measurement_id = m.id AND mv.metric_key = \'fw_version\''
+				. ' ORDER BY s.id'
+			)->fetchAll();
+			foreach ($rows as &$row) {
+				$row['settings'] = isset($row['settings']) ? (json_decode($row['settings'], true) ?? new stdClass()) : new stdClass();
+			}
+			adminJson(200, $rows);
+		} catch (\Throwable $e) {
+			adminJson(500, ['error' => 'DB-Fehler: ' . $e->getMessage()]);
+		}
+	})(),
 
 	// POST api/stations  { slug, name }
 	$sub === 'stations' && $method === 'POST' => (function () use ($pdo) {
@@ -172,7 +173,7 @@ adminJson(200, ['ok' => true, 'id' => $id, 'name' => $name, 'slug' => $slug]);
 			if (strlen($password) < 8)
 				adminJson(422, ['error' => 'Passwort muss mindestens 8 Zeichen lang sein']);
 			$hash = password_hash($password, PASSWORD_BCRYPT);
-			$pdo->prepare('UPDATE users SET password_hash=? WHERE id=?')->execute([$hash, $id]);
+			$pdo->prepare('UPDATE users SET password=? WHERE id=?')->execute([$hash, $id]);
 		}
 		adminJson(200, ['ok' => true, 'id' => $id]);
 	})(),
@@ -456,12 +457,63 @@ adminJson(200, ['ok' => true, 'id' => $id, 'name' => $name, 'slug' => $slug]);
 			if ($pass === '') adminJson(422, ['error' => 'password fÃ¼r Admin-Anlage erforderlich', 'log' => $log]);
 			if (strlen($pass) < 8) adminJson(422, ['error' => 'Passwort mind. 8 Zeichen', 'log' => $log]);
 			$hash = password_hash($pass, PASSWORD_BCRYPT);
-			$pdo->prepare("INSERT INTO users (email, password_hash, role) VALUES (?,?,'admin')")->execute([$email, $hash]);
+			$pdo->prepare("INSERT INTO users (email, password, role) VALUES (?,?,'admin')")->execute([$email, $hash]);
 			$log[] = "Admin-User '$email' angelegt";
 		} else {
 			$log[] = 'Admin-User bereits vorhanden';
 		}
 		adminJson(200, ['ok' => true, 'log' => $log]);
+	})(),
+
+	// GET api/rawdata?station=slug&hours=24  – alle Metriken ungefiltert
+	$sub === 'rawdata' && $method === 'GET' => (function () use ($pdo) {
+		$slug  = trim($_GET['station'] ?? '');
+		$hours = min(720, max(1, (int)($_GET['hours'] ?? 24)));
+
+		if ($slug !== '') {
+			$st = $pdo->prepare('SELECT id FROM stations WHERE slug=?');
+			$st->execute([$slug]);
+		} else {
+			$st = $pdo->query('SELECT id FROM stations ORDER BY id LIMIT 1');
+		}
+		$stationId = (int)($st->fetchColumn() ?: 0);
+		if ($stationId === 0) adminJson(404, ['error' => 'Station nicht gefunden']);
+
+		try {
+			// Alle Messwerte im Zeitfenster – kein Metrik-Filter
+			$stmt = $pdo->prepare("
+				SELECT m.created_at AS ts, mv.metric_key, mv.value
+				FROM measurements m
+				JOIN measurement_values mv ON mv.measurement_id = m.id
+				WHERE m.station_id = ?
+				  AND m.created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? HOUR)
+				ORDER BY m.created_at DESC, mv.metric_key ASC
+			");
+			$stmt->execute([$stationId, $hours]);
+			$rows = $stmt->fetchAll();
+
+			// Zeilen nach Zeitstempel gruppieren
+			$byTs = [];
+			foreach ($rows as $r) {
+				$ts = $r['ts'];
+				if (!isset($byTs[$ts])) $byTs[$ts] = ['ts' => $ts];
+				$byTs[$ts][$r['metric_key']] = $r['value'];
+			}
+
+			// Alle vorkommenden Keys ermitteln (sortiert)
+			$allKeys = [];
+			foreach ($rows as $r) {
+				$allKeys[$r['metric_key']] = true;
+			}
+			ksort($allKeys);
+
+			adminJson(200, [
+				'keys'  => array_keys($allKeys),
+				'rows'  => array_values($byTs),
+			]);
+		} catch (\Throwable $e) {
+			adminJson(500, ['error' => 'DB-Fehler: ' . $e->getMessage()]);
+		}
 	})(),
 
 	default => adminJson(404, ['error' => 'Unbekannte Admin-Aktion']),

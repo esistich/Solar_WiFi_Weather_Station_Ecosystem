@@ -28,10 +28,10 @@ if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 	// Primär: Admin-User aus der Datenbank (role='admin')
 	try {
 		$pdo  = getDb();
-		$stmt = $pdo->prepare("SELECT id, password_hash FROM users WHERE email=? AND role='admin' LIMIT 1");
+		$stmt = $pdo->prepare("SELECT id, password FROM users WHERE email=? AND role='admin' LIMIT 1");
 		$stmt->execute([$inputUser]);
 		$row = $stmt->fetch();
-		if ($row && password_verify($inputPass, $row['password_hash'])) {
+		if ($row && password_verify($inputPass, $row['password'])) {
 			$loginOk = true;
 		}
 	} catch (\Throwable $e) {
@@ -370,6 +370,7 @@ if (!$loggedIn): ?>
 
 <script src="https://cdn.metroui.org.ua/current/metro.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script src="assets/admin.js"></script>
 </body>
 </html>

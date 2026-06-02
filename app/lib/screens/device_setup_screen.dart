@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../models/models.dart';
 import '../services/services.dart';
+import '../widgets/weather_utils.dart';
 
 /// Geräte-Setup in drei Schritten:
 ///  1. Manuell (nur API-URL) oder Soft-AP
@@ -30,6 +31,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   final _apiPassCtrl     = TextEditingController();
   final _stationSlugCtrl = TextEditingController();
   bool _apiHttps         = true;
+  int  _iconIndex        = 0; // Geraete-Avatar
 
   @override
   void initState() {
@@ -43,6 +45,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
       _apiPassCtrl.text     = d.apiPassword;
       _stationSlugCtrl.text = d.stationSlug;
       _apiHttps             = d.apiHttps;
+      _iconIndex            = d.iconIndex;
       _step = 2; // direkt in Formular-Schritt
     }
   }
@@ -113,6 +116,8 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
 		  stationSlugCtrl: _stationSlugCtrl,
 		  apiHttps:    _apiHttps,
 		  onHttpsChanged: (v) => setState(() => _apiHttps = v),
+		  iconIndex: _iconIndex,
+		  onIconChanged: (i) => setState(() => _iconIndex = i),
 		  busy:  _busy,
 		  error: _error,
 		  onSave: _saveManual,
@@ -186,6 +191,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
 	  apiUser:     _apiUserCtrl.text.trim(),
 	  apiPassword: _apiPassCtrl.text,
 	  stationSlug: _stationSlugCtrl.text.trim(),
+	  iconIndex:   _iconIndex,
 	);
 	if (!mounted) return;
 	final provider = context.read<DeviceProvider>();
@@ -400,6 +406,8 @@ class _ManualSetup extends StatelessWidget {
   final TextEditingController stationSlugCtrl;
   final bool apiHttps;
   final ValueChanged<bool> onHttpsChanged;
+  final int iconIndex;
+  final ValueChanged<int> onIconChanged;
   final bool busy;
   final String? error;
   final VoidCallback onSave;
@@ -414,6 +422,8 @@ class _ManualSetup extends StatelessWidget {
 	required this.stationSlugCtrl,
 	required this.apiHttps,
 	required this.onHttpsChanged,
+	required this.iconIndex,
+	required this.onIconChanged,
 	required this.busy,
 	required this.error,
 	required this.onSave,
@@ -458,7 +468,7 @@ class _ManualSetup extends StatelessWidget {
 			decoration: const InputDecoration(hintText: '••••••••'),
 		  ),
 		  const SizedBox(height: 12),
-		  _label('Station-Slug (für Verlaufsdaten)'),
+		  _label('Station-Slug (fuer Verlaufsdaten)'),
 		  TextField(
 			controller: stationSlugCtrl,
 			decoration: const InputDecoration(hintText: 'z.B. waggum'),
@@ -469,6 +479,46 @@ class _ManualSetup extends StatelessWidget {
 			onChanged: onHttpsChanged,
 			title: const Text('HTTPS verwenden'),
 			contentPadding: EdgeInsets.zero,
+		  ),
+		  const SizedBox(height: 16),
+		  _label('Geraete-Symbol'),
+		  const SizedBox(height: 8),
+		  Wrap(
+			spacing: 10,
+			runSpacing: 10,
+			children: [
+			  for (var i = 0; i < WeatherUtils.deviceIcons.length; i++)
+				GestureDetector(
+				  onTap: () => onIconChanged(i),
+				  child: AnimatedContainer(
+					duration: const Duration(milliseconds: 200),
+					width: 52,
+					height: 52,
+					decoration: BoxDecoration(
+					  color: i == iconIndex
+						  ? Theme.of(context).colorScheme.primaryContainer
+						  : Theme.of(context).colorScheme.surfaceContainerHighest,
+					  borderRadius: BorderRadius.circular(12),
+					  border: i == iconIndex
+						  ? Border.all(
+							  color: Theme.of(context).colorScheme.primary,
+							  width: 2,
+							)
+						  : null,
+					),
+					child: Tooltip(
+					  message: WeatherUtils.deviceIconLabels[i],
+					  child: Icon(
+						WeatherUtils.deviceIcons[i],
+						size: 26,
+						color: i == iconIndex
+							? Theme.of(context).colorScheme.primary
+							: Theme.of(context).colorScheme.onSurfaceVariant,
+					  ),
+					),
+				  ),
+				),
+			],
 		  ),
 		  if (error != null) ...[
 			const SizedBox(height: 12),
@@ -484,7 +534,7 @@ class _ManualSetup extends StatelessWidget {
 					child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
 				  )
 				: const Icon(Icons.check),
-			label: Text(busy ? 'Speichere…' : 'Gerät speichern'),
+			label: Text(busy ? 'Speichere...' : 'Geraet speichern'),
 		  ),
 		],
 	  ),

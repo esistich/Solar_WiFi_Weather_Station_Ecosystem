@@ -4,7 +4,7 @@
 - Wenn neue Arduino-Bibliotheken im Sketch verwendet werden, diese direkt per PowerShell von GitHub herunterladen und nach C:\Users\EsIst\Documents\Arduino\libraries\ installieren – nicht nur erwähnen.
 - Bei jeder Aktualisierung der SWSApiClient-Bibliothek (library/SWSApiClient/) soll der Agent die Bibliothek automatisch in den Arduino-Libraries-Ordner kopieren (C:/Users/EsIst/Documents/Arduino/libraries/SWSApiClient/).
 - Nach jeder Änderung an Dateien im api/-Ordner automatisch den upload/-Ordner aktualisieren mit: `robocopy api upload /E /XF "db.php" "auth.php" "*adminsdk*.json" /XD "upload" "homeassistant"` – homeassistant/ gehört nicht auf den Server.
-- Nach jeder Änderung immer das passende Script ausführen: (1) api/ → `tools/build_upload.ps1` → upload/, (2) sketch_sws/ + sketch_sws_display/ + library/SWSApiClient/ → `tools/sync_arduino.ps1` → Arduino-Sketchbook, (3) app/ (Flutter) → `flutter build apk --release` → APK. Das zentrale Script `tools/build_all.ps1` führt alle drei Schritte durch. Einzelne Teile können mit -Skip api, -Skip arduino oder -Skip app übersprungen werden.
+- Nach jeder Änderung immer das passende Script ausführen: (1) api/ → `tools/build_upload.ps1` → upload/, (2) sketch_sws/ + sketch_sws_display/ + library/SWSApiClient/ → `tools/sync_arduino.ps1` → Arduino-Sketchbook, (3) app/ (Flutter) → `C:\flutter\bin\flutter build apk --release` → APK. Das zentrale Script `tools/build_all.ps1` führt alle drei Schritte durch. Einzelne Teile können mit -Skip api, -Skip arduino oder -Skip app übersprungen werden.
 - SFTP-Deployment für Solar_WiFi_Weather_Station: Der vollständige Deploy-Ablauf ist IMMER:
   1. `powershell -ExecutionPolicy Bypass -File tools/build_upload.ps1` → synchronisiert api/ → upload/ (ohne Secrets)
   2. `powershell -ExecutionPolicy Bypass -File tools/deploy_server.ps1` → lädt upload/ per SFTP auf den Server hoch
@@ -15,6 +15,9 @@
 - Niemals die .htaccess des Webspace-Roots oder WordPress-Verzeichnisses anfassen oder ändern.
 - Für PHP-Fehlerdiagnose auf dem Webspace: wp-content/debug.log lesen (falls WP_DEBUG_LOG aktiv). Niemals .htaccess ändern um display_errors zu aktivieren.
 - Flutter und Android SDK sind direkt auf C:\ installiert (z.B. C:\flutter und C:\Android\Sdk\). Immer diese Pfade verwenden, nie danach suchen. ADB befindet sich unter `C:\Android\Sdk\platform-tools\adb.exe`.
+- Beim Bearbeiten von JavaScript-Dateien immer auf folgende Syntaxfehler prüfen bevor deployed wird: (1) `await` ohne `async` in Funktionsdeklarationen, (2) nested Backtick-Template-Literals (`` `...`x`...` `` ist ungültig — stattdessen String-Konkatenation `'x'+var+'x'` verwenden), (3) nach jedem größeren JS-Edit die kritischen Stellen mit get_file/read nochmal verifizieren.
+- Für PHP-Syntax-Checks immer `C:\xampp\php\php.exe -l <datei>` verwenden, vor jedem Deploy von PHP-Dateien.
+- Bei Zeitzonenkonvertierungen in JavaScript immer UTC+2 verwenden bzw. 'Europe/Berlin' (das deckt automatisch Sommer/Winterzeit ab). Zeitstempel aus der DB (UTC) sollen im Dashboard mit `Europe/Berlin` als Zeitzone dargestellt werden, damit automatisch zwischen CET (UTC+1) und CEST (UTC+2) umgeschaltet wird.
 
 ---
 
@@ -152,6 +155,7 @@
 ### PHP
 - Credentials und Secrets aus `.env` oder einer Konfigurationsdatei außerhalb des Document-Root lesen.
 - `.htaccess` für alle `lib/`-Verzeichnisse mit `Require all denied` schützen.
+- Für PHP-Syntax-Checks immer `C:\xampp\php\php.exe -l <datei>` verwenden, vor jedem Deploy von PHP-Dateien.
 
 ### Arduino / C++
 - Keine WLAN-Credentials, API-Keys oder Endpunkt-URLs als Klartext in `.ino`/`.h`-Dateien – Config-Portal oder EEPROM verwenden.

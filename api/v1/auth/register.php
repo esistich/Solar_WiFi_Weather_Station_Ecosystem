@@ -42,7 +42,7 @@ if ($dup->fetch()) {
 
 // Benutzer anlegen
 $hash = password_hash($pass, PASSWORD_BCRYPT);
-$db->prepare('INSERT INTO users (email, password_hash) VALUES (?, ?)')->execute([$email, $hash]);
+$db->prepare('INSERT INTO users (email, password) VALUES (?, ?)')->execute([$email, $hash]);
 $userId = (int)$db->lastInsertId();
 
 // Einladungscode als verwendet markieren

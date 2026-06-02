@@ -1,11 +1,11 @@
-ï»¿-- ============================================================
--- Solar WiFi Weather Station â€“ Migration v2
+-- ============================================================
+-- Solar WiFi Weather Station – Migration v2
 -- Neue Struktur: stations, measurement_values, metric_definitions
 -- Bestehende measurements-Daten werden migriert.
 --
 -- REIHENFOLGE:
---   1. Dieses Skript in der Datenbank ausfÃ¼hren
---   2. AnschlieÃŸend neue API v1 deployen
+--   1. Dieses Skript in der Datenbank ausführen
+--   2. Anschließend neue API v1 deployen
 -- ============================================================
 
 -- ----------------------------------------------------------
@@ -15,18 +15,18 @@ CREATE TABLE IF NOT EXISTS `stations` (
   `id`         INT UNSIGNED  NOT NULL AUTO_INCREMENT,
   `slug`       VARCHAR(64)   NOT NULL UNIQUE COMMENT 'URL-freundlicher Bezeichner (z.B. sws-garten)',
   `name`       VARCHAR(128)  NOT NULL DEFAULT 'SWS Station',
-  `api_key`    VARCHAR(64)   NULL     COMMENT 'ZukÃ¼nftig: stationsspezifischer API-Key',
+  `api_key`    VARCHAR(64)   NULL     COMMENT 'Zukünftig: stationsspezifischer API-Key',
   `settings`   JSON          NULL     COMMENT 'Remote-Config: sleep_min, temp_corr, elevation, api_path',
   `created_at` TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_slug` (`slug`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Standardstation anlegen (fÃ¼r bestehende Daten)
+-- Standardstation anlegen (für bestehende Daten)
 INSERT IGNORE INTO `stations` (`id`, `slug`, `name`) VALUES (1, 'sws-main', 'SWS Hauptstation');
 
 -- ----------------------------------------------------------
--- 2. measurements â€“ station_id + device_ts hinzufÃ¼gen
+-- 2. measurements – station_id + device_ts hinzufügen
 -- ----------------------------------------------------------
 ALTER TABLE `measurements`
   ADD COLUMN IF NOT EXISTS `station_id` INT UNSIGNED NOT NULL DEFAULT 1
@@ -51,16 +51,16 @@ CREATE TABLE IF NOT EXISTS `metric_definitions` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT IGNORE INTO `metric_definitions` (`metric_key`, `label`, `unit`, `display_order`, `chart_color`) VALUES
-  ('temperature',     'Temperatur AuÃŸen',  'Â°C',  1,  '#e15759'),
-  ('pool_temperature','Temperatur Wasser', 'Â°C',  2,  '#4e79a7'),
+  ('temperature',     'Temperatur Außen',  '°C',  1,  '#e15759'),
+  ('pool_temperature','Temperatur Wasser', '°C',  2,  '#4e79a7'),
   ('humidity',        'Luftfeuchte',       '%',   3,  '#59a14f'),
   ('rel_pressure',    'Luftdruck (rel.)',  'hPa', 4,  '#9c755f'),
   ('abs_pressure',    'Luftdruck (abs.)',  'hPa', 5,  '#bab0ac'),
   ('battery_pct',     'Batterie',          '%',   6,  '#f28e2b'),
   ('battery_volt',    'Spannung',          'V',   7,  '#edc948'),
   ('wifi_strength',   'WLAN',             'dBm',  8,  '#76b7b2'),
-  ('heat_index',      'Hitzeindex',        'Â°C',  9,  '#ff9da7'),
-  ('dewpoint',        'Taupunkt',          'Â°C',  10, '#b07aa1'),
+  ('heat_index',      'Hitzeindex',        '°C',  9,  '#ff9da7'),
+  ('dewpoint',        'Taupunkt',          '°C',  10, '#b07aa1'),
   ('trend_value',     'Drucktrend',       'hPa',  11, '#d37295');
 
 -- ----------------------------------------------------------
@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS `measurement_values` (
 
 -- ----------------------------------------------------------
 -- 5. Bestehende Messdaten in measurement_values migrieren
---    (nur Felder die numerisch sind; Strings werden Ã¼bersprungen)
+--    (nur Felder die numerisch sind; Strings werden übersprungen)
 -- ----------------------------------------------------------
 INSERT IGNORE INTO `measurement_values` (`measurement_id`, `metric_key`, `value`)
   SELECT `id`, 'temperature',      `temperature`   FROM `measurements` WHERE `temperature`    IS NOT NULL;
@@ -120,7 +120,7 @@ INSERT IGNORE INTO `measurement_values` (`measurement_id`, `metric_key`, `value`
 CREATE TABLE IF NOT EXISTS `users` (
   `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `email`         VARCHAR(255) NOT NULL UNIQUE,
-  `password_hash` VARCHAR(255) NOT NULL,
+  `password` VARCHAR(255) NOT NULL,
   `role`          ENUM('user','admin') NOT NULL DEFAULT 'user',
   `created_at`    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
@@ -147,21 +147,21 @@ CREATE TABLE IF NOT EXISTS `invite_codes` (
 
 -- ============================================================
 -- Migration abgeschlossen.
--- Alte Spalten in measurements kÃ¶nnen nach Verifikation
+-- Alte Spalten in measurements können nach Verifikation
 -- mit ALTER TABLE measurements DROP COLUMN ... entfernt werden.
 -- ============================================================
 
 -- ----------------------------------------------------------
--- Bestehende users-Tabelle: role-Spalte nachrÃ¼sten (idempotent)
+-- Bestehende users-Tabelle: role-Spalte nachrüsten (idempotent)
 -- ----------------------------------------------------------
 ALTER TABLE `users`
-  ADD COLUMN IF NOT EXISTS `role` ENUM('user','admin') NOT NULL DEFAULT 'user' AFTER `password_hash`;
+  ADD COLUMN IF NOT EXISTS `role` ENUM('user','admin') NOT NULL DEFAULT 'user' AFTER `password`;
 
 -- ----------------------------------------------------------
--- NachtrÃ¤gliche Korrekturen (idempotent ausfÃ¼hrbar)
+-- Nachträgliche Korrekturen (idempotent ausführbar)
 -- ----------------------------------------------------------
 -- value-Spalte auf VARCHAR erweitern damit String-Metriken
--- (pressure_state, zambretti, trend) gespeichert werden kÃ¶nnen.
+-- (pressure_state, zambretti, trend) gespeichert werden können.
 ALTER TABLE `measurement_values`
   MODIFY COLUMN `value` VARCHAR(255) NOT NULL;
 
@@ -188,17 +188,17 @@ ALTER TABLE `measurements`
   MODIFY COLUMN `dewpoint_spread` DECIMAL(5,2) NULL;
 
 -- ----------------------------------------------------------
--- Migration v2.2 â€“ role-Spalte in users (idempotent)
--- Bestehende Installationen: role-Spalte nachtrÃ¤glich hinzufÃ¼gen.
--- Bereits vorhandene Admins mÃ¼ssen danach im Admin-Dashboard
+-- Migration v2.2 – role-Spalte in users (idempotent)
+-- Bestehende Installationen: role-Spalte nachträglich hinzufügen.
+-- Bereits vorhandene Admins müssen danach im Admin-Dashboard
 -- auf role='admin' gesetzt werden.
 -- ----------------------------------------------------------
 ALTER TABLE `users`
   ADD COLUMN IF NOT EXISTS `role` ENUM('user','admin') NOT NULL DEFAULT 'user'
-  AFTER `password_hash`;
+  AFTER `password`;
 
 -- ----------------------------------------------------------
--- Migration v2.3 â€“ Remote-Config: settings-Spalte in stations (idempotent)
+-- Migration v2.3 – Remote-Config: settings-Spalte in stations (idempotent)
 -- ----------------------------------------------------------
 ALTER TABLE `stations`
   ADD COLUMN IF NOT EXISTS `settings` JSON NULL

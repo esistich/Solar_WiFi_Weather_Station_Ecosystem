@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../services/services.dart';
@@ -67,6 +67,21 @@ class SettingsScreen extends StatelessWidget {
 		  ),
 
 		  const Divider(),
+
+  // -- Darstellung ---------------------------------------------------
+  const _SectionHeader('Darstellung'),
+  Consumer<ThemeProvider>(
+builder: (context, theme, _) => SwitchListTile(
+  secondary: Icon(
+theme.isDark ? Icons.dark_mode : Icons.light_mode,
+  ),
+  title: const Text('Dunkles Design'),
+  value: theme.isDark,
+  onChanged: (_) => theme.toggle(),
+),
+  ),
+
+  const Divider(),
 
 		  // ── App-Info ─────────────────────────────────────────
 		  const _SectionHeader('App'),

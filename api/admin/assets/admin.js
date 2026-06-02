@@ -28,7 +28,10 @@ async function api(path, method = 'GET', body = null) {
   const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(`?action=api/${path}`, opts);
-  return r.json();
+  if (!r.ok) { console.error(`API ${path} HTTP ${r.status}`); return null; }
+  const json = await r.json();
+  if (json && json.error) { console.error(`API ${path} Fehler:`, json.error); return null; }
+  return json;
 }
 
 // ---- Tabellen-Helper ----
@@ -48,21 +51,21 @@ function renderTable(targetId, columns, rows, actions) {
 async function loadStations() {
   const rows = await api('stations');
   const el = document.getElementById('stations-table');
-  if (!rows.length) { el.innerHTML = '<p class="fg-secondary">Keine Einträge.</p>'; return; }
+  if (!rows || !rows.length) { el.innerHTML = '<p class="fg-secondary">Keine Eintr\u00e4ge.</p>'; return; }
   el.innerHTML = `<table>
     <thead><tr><th>ID</th><th>Slug</th><th>Name</th><th>MAC</th><th>Letzte Aktivit&#228;t</th><th>Firmware</th><th>Erstellt</th><th></th><th></th></tr></thead>
     <tbody>${rows.map(r => `<tr>
       <td>${r.id}</td>
       <td><code>${r.slug}</code></td>
       <td>${r.name}</td>
-      <td class="fg-secondary" style="font-size:.82rem;font-family:monospace">${r.mac ?? '–'}</td>
-      <td class="fg-secondary" style="font-size:.85rem">${r.last_seen ?? '–'}</td>
-      <td style="font-size:.82rem">${r.fw_version ? '<code>'+r.fw_version+'</code>' : '–'}</td>
-      <td class="fg-secondary" style="font-size:.85rem">${r.created_at ?? ''}</td>
+      <td class="fg-secondary" style="font-size:.82rem;font-family:monospace">${r.mac ?? '\u2013'}</td>
+      <td class="fg-secondary" style="font-size:.85rem">${fmtTs(r.last_seen)}</td>
+      <td style="font-size:.82rem">${r.fw_version ? '<code>'+r.fw_version+'</code>' : '\u2013'}</td>
+      <td class="fg-secondary" style="font-size:.85rem">${fmtTs(r.created_at)}</td>
       <td><button class="btn-edit" onclick="editStation(${r.id},'${r.slug.replace(/'/g,"\\'")}','${r.name.replace(/'/g,"\\'")}','${(r.mac??'').replace(/'/g,"\\'")}')">Bearbeiten</button></td>
-      <td><button class="btn-del"  onclick="deleteStation(${r.id})">Löschen</button></td>
+      <td><button class="btn-del"  onclick="deleteStation(${r.id})">L\u00f6schen</button></td>
     </tr>`).join('')}</tbody></table>`;
-  // Live-Station-Dropdown und History-Station-Dropdown befüllen
+  // Live-Station-Dropdown und History-Station-Dropdown bef\u00fcllen
   const sel = document.getElementById('live-station');
   sel.innerHTML = rows.map(r => `<option value="${r.slug}">${r.name}</option>`).join('');
   const selH = document.getElementById('history-station');
@@ -103,6 +106,7 @@ async function deleteStation(id) {
 // ---- Metriken ----
 async function loadMetrics() {
   const rows = await api('metrics');
+  if (!rows) return;
   renderTable('metrics-table',
     [{key:'metric_key',label:'Key'},{key:'label',label:'Bezeichnung'},
      {key:'unit',label:'Einheit'},{key:'display_order',label:'Reihenfolge'},
@@ -156,6 +160,7 @@ document.getElementById('metric-form')?.addEventListener('submit', async e => {
 async function loadUsers() {
   const rows = await api('users');
   const el = document.getElementById('users-table');
+  if (!rows) { el.innerHTML = '<p class="fg-secondary">Fehler beim Laden.</p>'; return; }
   if (!Array.isArray(rows) || !rows.length) { el.innerHTML = '<p class="fg-secondary">Keine Einträge.</p>'; return; }
   el.innerHTML = `<table>
     <thead><tr><th>ID</th><th>E-Mail</th><th>Rolle</th><th>Erstellt</th><th></th><th></th></tr></thead>
@@ -188,13 +193,14 @@ function editUser(id, email, role) {
 async function deleteUser(id) {
   if (!confirm('Benutzer wirklich löschen?')) return;
   const res = await api(`users&id=${id}`, 'DELETE');
-  if (res.error) { alert(res.error); return; }
+  if (!res || res.error) { alert(res?.error ?? 'Fehler'); return; }
   loadUsers();
 }
 
 // ---- Einladungen ----
 async function loadInvites() {
   const rows = await api('invites');
+  if (!rows) return;
   renderTable('invites-table',
     [{key:'id',label:'ID'},{key:'code',label:'Code'},
      {key:'created_at',label:'Erstellt'},{key:'used_at',label:'Verwendet'}],
@@ -205,6 +211,7 @@ async function loadInvites() {
 
 async function createInvite() {
   const res = await api('invites', 'POST');
+  if (!res) return;
   alert(`Neuer Code: ${res.code}`);
   loadInvites();
 }
@@ -257,6 +264,7 @@ async function loadLive() {
   const slug = document.getElementById('live-station').value;
   const d = await api(`live&station=${encodeURIComponent(slug)}`);
   const grid = document.getElementById('live-data');
+  if (!d || d.error) { grid.innerHTML = `<p class="fg-secondary">${d?.error ?? 'Fehler beim Laden'}</p>`; return; }
   if (d.error) { grid.innerHTML = `<p class="fg-secondary">${d.error}</p>`; return; }
 
   const ts = d.created_at
@@ -339,6 +347,16 @@ function tsToLocal(utcStr) {
   return new Date(utcStr.replace(' ', 'T') + 'Z');
 }
 
+// UTC-Timestamp als deutschen Datetime-String (Europe/Berlin, Sommer/Winterzeit automatisch)
+function fmtTs(ts) {
+  if (!ts) return '–';
+  return tsToLocal(ts).toLocaleString('de-DE', {
+    timeZone: 'Europe/Berlin',
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+}
+
 async function loadHistory() {
   const slug  = document.getElementById('history-station').value;
   const hours = document.getElementById('history-hours').value;
@@ -348,8 +366,8 @@ async function loadHistory() {
   grid.innerHTML = '<p class="fg-secondary">Lade…</p>';
 
   const d = await api(`history&station=${encodeURIComponent(slug)}&hours=${hours}`);
-  if (d.error) { grid.innerHTML = `<p class="fg-secondary">${d.error}</p>`; return; }
-  if (!d.series?.length) { grid.innerHTML = '<p class="fg-secondary">Keine Daten im gewählten Zeitraum.</p>'; return; }
+  if (!d || d.error) { grid.innerHTML = `<p class="fg-secondary">${d?.error ?? 'Fehler beim Laden'}</p>`; return; }
+  if (!d.series?.length) { grid.innerHTML = '<p class="fg-secondary">Keine Daten im gew\u00e4hlten Zeitraum.</p>'; return; }
 
   // Alte Charts zerstören
   Object.values(historyCharts).forEach(c => c.destroy());
@@ -413,13 +431,45 @@ async function loadHistory() {
           },
           y: {
             ticks: { color: '#888', callback: v => v.toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' ' + s.unit },
-            grid:  { color: '#2a2a2a' },
-          },
-        },
-      },
-    });
-  });
-}
+                      grid:  { color: '#2a2a2a' },
+                      },
+                    },
+                  },
+                });
+              });
+
+                // ---- Rohdaten-Tabelle (alle Metriken) ----
+                const raw = await api(`rawdata&station=${encodeURIComponent(slug)}&hours=${hours}`);
+                if (!raw || raw.error) {
+                  grid.insertAdjacentHTML('beforeend', `<p class="fg-secondary">${raw?.error ?? 'Rohdaten konnten nicht geladen werden'}</p>`);
+                  return;
+                }
+
+                const colKeys = raw.keys;
+                const tableHtml = `
+                  <div class="sws-history-raw">
+                    <div class="sws-history-raw-title">Rohdaten &mdash; alle Messwerte (${raw.rows.length} Eintr\u00e4ge)</div>
+                    <div class="sws-raw-scroll">
+                      <table class="sws-raw-table">
+                        <thead><tr>
+                          <th>Zeitpunkt</th>
+                          ${colKeys.map(k => '<th>' + k + '</th>').join('')}
+                        </tr></thead>
+                        <tbody>
+                          ${raw.rows.map(row =>
+                            '<tr><td class="sws-raw-ts">' +
+                            new Date(row.ts + 'Z').toLocaleString('de-DE', { timeZone: 'Europe/Berlin', day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit' }) +
+                            '</td>' +
+                            colKeys.map(k => '<td>' + (row[k] !== undefined ? row[k] : '\u2013') + '</td>').join('') +
+                            '</tr>'
+                          ).join('')}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>`;
+
+                grid.insertAdjacentHTML('beforeend', tableHtml);
+              }
 
 document.getElementById('history-station')?.addEventListener('change', loadHistory);
 document.getElementById('history-hours')?.addEventListener('change', loadHistory);

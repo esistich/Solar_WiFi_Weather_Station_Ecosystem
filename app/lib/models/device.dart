@@ -11,6 +11,7 @@ class Device {
   final String apiUser;      // Basic-Auth Benutzername (leer = kein Auth)
   final String apiPassword;  // Basic-Auth Passwort
   final String stationSlug;  // Station-Slug fuer /v1/history?station=<slug>
+  final int iconIndex;       // Index in WeatherUtils.deviceIcons (0 = Haus)
 
   const Device({
 	required this.id,
@@ -22,6 +23,7 @@ class Device {
 	this.apiUser = '',
 	this.apiPassword = '',
 	this.stationSlug = '',
+	this.iconIndex = 0,
   });
 
   String get apiUrl =>
@@ -50,6 +52,7 @@ class Device {
 	String? apiUser,
 	String? apiPassword,
 	String? stationSlug,
+	int? iconIndex,
   }) =>
 	  Device(
 		id: id,
@@ -61,6 +64,7 @@ class Device {
 		apiUser: apiUser ?? this.apiUser,
 		apiPassword: apiPassword ?? this.apiPassword,
 		stationSlug: stationSlug ?? this.stationSlug,
+		iconIndex: iconIndex ?? this.iconIndex,
 	  );
 
   Map<String, dynamic> toJson() => {
@@ -73,6 +77,7 @@ class Device {
 		'apiUser': apiUser,
 		'apiPassword': apiPassword,
 		'stationSlug': stationSlug,
+		'iconIndex': iconIndex,
 	  };
 
   factory Device.fromJson(Map<String, dynamic> json) => Device(
@@ -85,6 +90,7 @@ class Device {
 		apiUser: json['apiUser'] as String? ?? '',
 		apiPassword: json['apiPassword'] as String? ?? '',
 		stationSlug: json['stationSlug'] as String? ?? '',
+		iconIndex: json['iconIndex'] as int? ?? 0,
 	  );
 
   /// Serialisiert eine Liste von Geräten für SharedPreferences.
