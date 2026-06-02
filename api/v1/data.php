@@ -79,11 +79,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	$mac     = normalizeMac($body['device_mac'] ?? null);
 	$station = resolveStation($db, $slug, $mac);
 	if (!$station) {
-		// Automatisch anlegen wenn noch keine Station existiert
-		$name = $body['station_name'] ?? ($slug ?? 'SWS Station 1');
-		$slug = $slug ?? ($mac ? 'sws-' . str_replace(':', '', substr($mac, -6)) : 'sws-' . substr(md5($name . time()), 0, 6));
-		$db->prepare('INSERT INTO stations (slug, name, mac) VALUES (?, ?, ?)')->execute([$slug, $name, $mac]);
-		$station = ['id' => (int)$db->lastInsertId(), 'slug' => $slug, 'name' => $name, 'mac' => $mac];
+		if ($mac || $slug) {
+			// MAC oder Slug bekannt aber noch keine passende Station → neu anlegen
+			$name    = $body['station_name'] ?? ($slug ?? 'SWS Station 1');
+			$slug    = $slug ?? 'sws-' . str_replace(':', '', substr($mac, -6));
+			$db->prepare('INSERT INTO stations (slug, name, mac) VALUES (?, ?, ?)')->execute([$slug, $name, $mac]);
+			$station = ['id' => (int)$db->lastInsertId(), 'slug' => $slug, 'name' => $name, 'mac' => $mac];
+		} else {
+			// Weder MAC noch Slug vorhanden → Fallback-Station verwenden um
+			// Datenvermischung mit echten Stationen zu verhindern
+			$station = resolveOrCreateFallbackStation($db);
+		}
 	}
 
 	$deviceTs = isset($body['device_ts']) ? (int)$body['device_ts'] : null;
