@@ -1,245 +1,359 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:provider/provider.dart';
 import '../models/models.dart';
+import '../services/device_provider.dart';
+import 'weather_utils.dart';
 
-/// Kachel für ein einzelnes Gerät im Dashboard.
+/// Visuell aufgewertete Kachel fuer die Startseite.
 class TileCard extends StatelessWidget {
   final Device device;
-  final Measurement? measurement;
-  final bool loading;
-  final String? error;
   final VoidCallback onTap;
   final VoidCallback onRefresh;
 
   const TileCard({
-	super.key,
-	required this.device,
-	required this.measurement,
-	required this.loading,
-	required this.error,
-	required this.onTap,
-	required this.onRefresh,
+    super.key,
+    required this.device,
+    required this.onTap,
+    required this.onRefresh,
   });
 
   @override
   Widget build(BuildContext context) {
-	final theme = Theme.of(context);
-	final stale = measurement?.isStale ?? false;
-	final borderColor = error != null
-		? theme.colorScheme.error
-		: stale
-			? Colors.orange
-			: theme.colorScheme.primary;
+    final provider = context.watch<DeviceProvider>();
+    final measurement = provider.measurementFor(device.id);
+    final loading = provider.isLoading(device.id);
+    final error = provider.errorFor(device.id);
+    final sparkline = provider.sparklineFor(device.id);
 
-	return Card(
-	  clipBehavior: Clip.antiAlias,
-	  shape: RoundedRectangleBorder(
-		borderRadius: BorderRadius.circular(16),
-		side: BorderSide(color: borderColor, width: 1.5),
-	  ),
-	  child: InkWell(
-		onTap: onTap,
-		child: Padding(
-		  padding: const EdgeInsets.all(16),
-		  child: Column(
-			crossAxisAlignment: CrossAxisAlignment.start,
-			children: [
-			  _Header(
-				device: device,
-				stale: stale,
-				error: error,
-				loading: loading,
-				onRefresh: onRefresh,
-			  ),
-			  const SizedBox(height: 12),
-			  if (loading && measurement == null)
-				const Center(
-				  child: Padding(
-					padding: EdgeInsets.symmetric(vertical: 16),
-					child: CircularProgressIndicator(),
-				  ),
-				)
-			  else if (error != null && measurement == null)
-				_ErrorBody(error: error!)
-			  else if (measurement != null)
-				_MeasurementBody(measurement: measurement!)
-			  else
-				const Text('Keine Daten'),
-			],
-		  ),
-		),
-	  ),
-	);
+    final zambretti = measurement?.zambretti ?? '';
+    final gradient = WeatherUtils.gradientForZambretti(zambretti);
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      elevation: 4,
+      clipBehavior: Clip.hardEdge,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(gradient: gradient),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _CardHeader(
+                device: device,
+                loading: loading,
+                error: error,
+                measurement: measurement,
+                onRefresh: onRefresh,
+              ),
+              const SizedBox(height: 12),
+              if (error != null)
+                _ErrorRow(error: error)
+              else if (measurement != null)
+                _DataSection(measurement: measurement, sparkline: sparkline)
+              else if (!loading)
+                const Text(
+                  'Keine Daten',
+                  style: TextStyle(color: Colors.white70),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
-class _Header extends StatelessWidget {
+// ── Header ──────────────────────────────────────────────────────────────────
+
+class _CardHeader extends StatelessWidget {
   final Device device;
-  final bool stale;
-  final String? error;
   final bool loading;
+  final String? error;
+  final Measurement? measurement;
   final VoidCallback onRefresh;
 
-  const _Header({
-	required this.device,
-	required this.stale,
-	required this.error,
-	required this.loading,
-	required this.onRefresh,
+  const _CardHeader({
+    required this.device,
+    required this.loading,
+    required this.error,
+    required this.measurement,
+    required this.onRefresh,
   });
 
   @override
   Widget build(BuildContext context) {
-	final theme = Theme.of(context);
-	return Row(
-	  children: [
-		Icon(
-		  Icons.wb_sunny_outlined,
-		  color: theme.colorScheme.primary,
-		  size: 22,
-		),
-		const SizedBox(width: 8),
-		Expanded(
-		  child: Text(
-			device.name,
-			style: theme.textTheme.titleMedium
-				?.copyWith(fontWeight: FontWeight.bold),
-			overflow: TextOverflow.ellipsis,
-		  ),
-		),
-		if (stale)
-		  const Tooltip(
-			message: 'Daten veraltet (> 1 Stunde)',
-			child: Icon(Icons.warning_amber, color: Colors.orange, size: 18),
-		  ),
-		if (error != null)
-		  const Tooltip(
-			message: 'Abruf fehlgeschlagen',
-			child: Icon(Icons.cloud_off, color: Colors.red, size: 18),
-		  ),
-		if (loading)
-		  const SizedBox(
-			width: 18,
-			height: 18,
-			child: CircularProgressIndicator(strokeWidth: 2),
-		  )
-		else
-		  IconButton(
-			icon: const Icon(Icons.refresh, size: 18),
-			onPressed: onRefresh,
-			tooltip: 'Aktualisieren',
-			padding: EdgeInsets.zero,
-			constraints: const BoxConstraints(),
-		  ),
-	  ],
-	);
+    final ageSeconds = measurement?.dataAgeSeconds;
+    final relTime =
+        ageSeconds != null ? WeatherUtils.relativeTime(ageSeconds) : null;
+    final zambretti = measurement?.zambretti ?? '';
+    final weatherIcon = WeatherUtils.iconForZambretti(zambretti);
+    final deviceIcon = WeatherUtils.deviceIcon(device.iconIndex);
+
+    return Row(
+      children: [
+        // Geraete-Avatar
+        CircleAvatar(
+          backgroundColor: Colors.white24,
+          radius: 20,
+          child: Icon(deviceIcon, color: Colors.white, size: 22),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                device.name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (relTime != null)
+                Text(
+                  relTime,
+                  style: const TextStyle(color: Colors.white60, fontSize: 12),
+                ),
+            ],
+          ),
+        ),
+        // Wetter-Icon
+        Icon(weatherIcon, color: Colors.white70, size: 28),
+        const SizedBox(width: 4),
+        // Status / Refresh
+        if (loading)
+          const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Colors.white70,
+            ),
+          )
+        else
+          InkWell(
+            onTap: onRefresh,
+            borderRadius: BorderRadius.circular(16),
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child: Icon(Icons.refresh, color: Colors.white70, size: 20),
+            ),
+          ),
+      ],
+    );
   }
 }
 
-class _MeasurementBody extends StatelessWidget {
+// ── Daten-Bereich ────────────────────────────────────────────────────────────
+
+class _DataSection extends StatelessWidget {
   final Measurement measurement;
+  final List<MeasurementPoint> sparkline;
 
-  const _MeasurementBody({required this.measurement});
+  const _DataSection({required this.measurement, required this.sparkline});
 
   @override
   Widget build(BuildContext context) {
-	return Column(
-	  children: [
-		_TempRow(
-		  icon: Icons.thermostat_outlined,
-		  label: 'Aussen',
-		  value: measurement.temperature,
-		  color: _tempColor(measurement.temperature),
-		),
-		if (measurement.poolTemperature != null)
-		  _TempRow(
-			icon: Icons.pool_outlined,
-			label: 'Wasser',
-			value: measurement.poolTemperature!,
-			color: _tempColor(measurement.poolTemperature!),
-		  ),
-		const SizedBox(height: 8),
-		Row(
-		  children: [
-			const Icon(Icons.access_time, size: 13, color: Colors.grey),
-			const SizedBox(width: 4),
-			Text(
-			  'Stand: ${measurement.timeShort} Uhr',
-			  style: const TextStyle(fontSize: 12, color: Colors.grey),
-			),
-		  ],
-		),
-	  ],
-	);
-  }
+    final battery = measurement.batteryPct;
 
-  Color _tempColor(double t) {
-	if (t <= 0) return Colors.blue;
-	if (t <= 15) return Colors.teal;
-	if (t <= 25) return Colors.green;
-	if (t <= 32) return Colors.orange;
-	return Colors.red;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        // Grosse Temperaturanzeige
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${measurement.temperature.toStringAsFixed(1)} °C',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 42,
+                fontWeight: FontWeight.w300,
+                height: 1.1,
+              ),
+            ),
+            if (measurement.poolTemperature != null) ...[
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  const Icon(Icons.pool, color: Colors.white60, size: 14),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${measurement.poolTemperature!.toStringAsFixed(1)} °C',
+                    style: const TextStyle(color: Colors.white70, fontSize: 14),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 8),
+            // Akku-Balken
+            _BatteryBar(pct: battery),
+          ],
+        ),
+        const Spacer(),
+        // Mini-Sparkline
+        if (sparkline.length > 3)
+          _Sparkline(points: sparkline)
+        else
+          // Zusaetzliche Feuchte/Druck-Infos wenn keine Sparkline
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (measurement.humidity > 0)
+                _InfoChip(
+                  icon: Icons.water_drop_outlined,
+                  value: '${measurement.humidity.toStringAsFixed(0)} %',
+                ),
+              if (measurement.relPressure > 0)
+                _InfoChip(
+                  icon: Icons.compress,
+                  value: '${measurement.relPressure.toStringAsFixed(0)} hPa',
+                ),
+            ],
+          ),
+      ],
+    );
   }
 }
 
-class _TempRow extends StatelessWidget {
+// ── Akku-Balken ──────────────────────────────────────────────────────────────
+
+class _BatteryBar extends StatelessWidget {
+  final int pct;
+  const _BatteryBar({required this.pct});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = WeatherUtils.batteryColor(pct);
+    return Row(
+      children: [
+        Icon(
+          pct > 75
+              ? Icons.battery_full
+              : pct > 40
+                  ? Icons.battery_4_bar
+                  : Icons.battery_2_bar,
+          color: color,
+          size: 16,
+        ),
+        const SizedBox(width: 4),
+        SizedBox(
+          width: 80,
+          height: 6,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: pct / 100.0,
+              backgroundColor: Colors.white24,
+              valueColor: AlwaysStoppedAnimation(color),
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          '$pct %',
+          style: TextStyle(color: color, fontSize: 12),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Mini-Sparkline ────────────────────────────────────────────────────────────
+
+class _Sparkline extends StatelessWidget {
+  final List<MeasurementPoint> points;
+  const _Sparkline({required this.points});
+
+  @override
+  Widget build(BuildContext context) {
+    final temps = points.map((p) => p.temperature).toList();
+    final minT = temps.reduce((a, b) => a < b ? a : b);
+    final maxT = temps.reduce((a, b) => a > b ? a : b);
+    final spots = [
+      for (var i = 0; i < temps.length; i++) FlSpot(i.toDouble(), temps[i]),
+    ];
+
+    return SizedBox(
+      width: 90,
+      height: 54,
+      child: LineChart(
+        LineChartData(
+          minY: minT - 1,
+          maxY: maxT + 1,
+          gridData: const FlGridData(show: false),
+          borderData: FlBorderData(show: false),
+          titlesData: const FlTitlesData(show: false),
+          lineTouchData: const LineTouchData(enabled: false),
+          lineBarsData: [
+            LineChartBarData(
+              spots: spots,
+              isCurved: true,
+              color: Colors.white,
+              barWidth: 2,
+              dotData: const FlDotData(show: false),
+              belowBarData: BarAreaData(
+                show: true,
+                color: Colors.white.withValues(alpha: 0.15),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Info-Chip ────────────────────────────────────────────────────────────────
+
+class _InfoChip extends StatelessWidget {
   final IconData icon;
-  final String label;
-  final double value;
-  final Color color;
-
-  const _TempRow({
-	required this.icon,
-	required this.label,
-	required this.value,
-	required this.color,
-  });
+  final String value;
+  const _InfoChip({required this.icon, required this.value});
 
   @override
   Widget build(BuildContext context) {
-	return Padding(
-	  padding: const EdgeInsets.symmetric(vertical: 3),
-	  child: Row(
-		children: [
-		  Icon(icon, size: 16, color: color),
-		  const SizedBox(width: 6),
-		  Text(
-			label,
-			style: const TextStyle(fontSize: 13, color: Colors.grey),
-		  ),
-		  const Spacer(),
-		  Text(
-			'${value.toStringAsFixed(1)} °C',
-			style: TextStyle(
-			  fontSize: 16,
-			  fontWeight: FontWeight.w600,
-			  color: color,
-			),
-		  ),
-		],
-	  ),
-	);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white60, size: 14),
+          const SizedBox(width: 4),
+          Text(value, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+        ],
+      ),
+    );
   }
 }
 
-class _ErrorBody extends StatelessWidget {
+// ── Fehler ───────────────────────────────────────────────────────────────────
+
+class _ErrorRow extends StatelessWidget {
   final String error;
-  const _ErrorBody({required this.error});
+  const _ErrorRow({required this.error});
 
   @override
   Widget build(BuildContext context) {
-	return Row(
-	  children: [
-		const Icon(Icons.error_outline, color: Colors.red, size: 16),
-		const SizedBox(width: 8),
-		Expanded(
-		  child: Text(
-			error,
-			style: const TextStyle(fontSize: 12, color: Colors.red),
-			maxLines: 2,
-			overflow: TextOverflow.ellipsis,
-		  ),
-		),
-	  ],
-	);
+    return Row(
+      children: [
+        const Icon(Icons.cloud_off, color: Colors.white70, size: 18),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            error,
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
   }
 }

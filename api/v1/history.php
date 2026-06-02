@@ -20,7 +20,7 @@
 
 declare(strict_types=1);
 
-requireBasicAuth();
+requireJwt(); // App sendet Bearer JWT (nicht Basic Auth)
 
 $db      = getDb();
 $slug    = $_GET['station'] ?? null;

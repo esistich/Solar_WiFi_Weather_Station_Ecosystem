@@ -36,8 +36,7 @@ class PushService {
 
   Future<void> _registerToken(String token) async {
 	if (!_auth.isLoggedIn) return;
-	final uri = Uri.parse('${_auth.backendUrl}/index.php')
-		.replace(queryParameters: {'route': 'push', 'action': 'register'});
+	final uri = Uri.parse('${_auth.backendUrl}/push/register');
 	try {
 	  await http.post(
 		uri,
@@ -55,8 +54,7 @@ class PushService {
   Future<void> unregister() async {
 	final token = await FirebaseMessaging.instance.getToken();
 	if (token == null || !_auth.isLoggedIn) return;
-	final uri = Uri.parse('${_auth.backendUrl}/index.php')
-		.replace(queryParameters: {'route': 'push', 'action': 'unregister'});
+	final uri = Uri.parse('${_auth.backendUrl}/push/unregister');
 	try {
 	  await http.delete(
 		uri,

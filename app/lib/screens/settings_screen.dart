@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../services/services.dart';
@@ -67,6 +67,21 @@ class SettingsScreen extends StatelessWidget {
 		  ),
 
 		  const Divider(),
+
+  // -- Darstellung ---------------------------------------------------
+  const _SectionHeader('Darstellung'),
+  Consumer<ThemeProvider>(
+builder: (context, theme, _) => SwitchListTile(
+  secondary: Icon(
+theme.isDark ? Icons.dark_mode : Icons.light_mode,
+  ),
+  title: const Text('Dunkles Design'),
+  value: theme.isDark,
+  onChanged: (_) => theme.toggle(),
+),
+  ),
+
+  const Divider(),
 
 		  // ── App-Info ─────────────────────────────────────────
 		  const _SectionHeader('App'),
@@ -151,63 +166,93 @@ class _AuthDialogState extends State<_AuthDialog>
 
   @override
   Widget build(BuildContext context) {
-	return AlertDialog(
-	  title: TabBar(
-		controller: _tabs,
-		tabs: const [Tab(text: 'Anmelden'), Tab(text: 'Registrieren')],
-	  ),
-	  content: SizedBox(
-		width: 320,
+	return Dialog(
+	  insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+	  child: IntrinsicHeight(
 		child: Column(
 		  mainAxisSize: MainAxisSize.min,
 		  children: [
-			const SizedBox(height: 12),
-			TextField(
-			  controller: _emailCtrl,
-			  decoration: const InputDecoration(labelText: 'E-Mail'),
-			  keyboardType: TextInputType.emailAddress,
+			// Tab-Leiste im Header
+			TabBar(
+			  controller: _tabs,
+			  tabs: const [Tab(text: 'Anmelden'), Tab(text: 'Registrieren')],
 			),
-			const SizedBox(height: 8),
-			TextField(
-			  controller: _passCtrl,
-			  decoration: const InputDecoration(labelText: 'Passwort'),
-			  obscureText: true,
-			),
-			// Einladungscode nur im Registrieren-Tab
-			AnimatedSize(
-			  duration: const Duration(milliseconds: 200),
-			  child: _tabs.index == 1
-				  ? Padding(
-					  padding: const EdgeInsets.only(top: 8),
-					  child: TextField(
-						controller: _inviteCtrl,
-						decoration: const InputDecoration(
-						  labelText: 'Einladungscode',
-						  prefixIcon: Icon(Icons.vpn_key_outlined),
-						),
+			Flexible(
+			  child: SingleChildScrollView(
+				padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+				child: Column(
+				  mainAxisSize: MainAxisSize.min,
+				  crossAxisAlignment: CrossAxisAlignment.stretch,
+				  children: [
+					TextField(
+					  controller: _emailCtrl,
+					  decoration: const InputDecoration(labelText: 'E-Mail'),
+					  keyboardType: TextInputType.emailAddress,
+					  textInputAction: TextInputAction.next,
+					  autofillHints: const [AutofillHints.email],
+					),
+					const SizedBox(height: 8),
+					TextField(
+					  controller: _passCtrl,
+					  decoration: const InputDecoration(labelText: 'Passwort'),
+					  obscureText: true,
+					  textInputAction: TextInputAction.done,
+					  onSubmitted: (_) => _submit(),
+					),
+					// Einladungscode nur im Registrieren-Tab
+					AnimatedSize(
+					  duration: const Duration(milliseconds: 200),
+					  child: _tabs.index == 1
+						  ? Padding(
+							  padding: const EdgeInsets.only(top: 8),
+							  child: TextField(
+								controller: _inviteCtrl,
+								decoration: const InputDecoration(
+								  labelText: 'Einladungscode',
+								  prefixIcon: Icon(Icons.vpn_key_outlined),
+								),
+							  ),
+							)
+						  : const SizedBox.shrink(),
+					),
+					if (_error != null) ...[
+					  const SizedBox(height: 8),
+					  Text(
+						_error!,
+						style: const TextStyle(color: Colors.red, fontSize: 12),
 					  ),
-					)
-				  : const SizedBox.shrink(),
+					],
+				  ],
+				),
+			  ),
 			),
-			if (_error != null) ...[
-			  const SizedBox(height: 8),
-			  Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
-			],
+			// Aktions-Buttons
+			Padding(
+			  padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+			  child: Row(
+				mainAxisAlignment: MainAxisAlignment.end,
+				children: [
+				  TextButton(
+					onPressed: _loading ? null : () => Navigator.pop(context),
+					child: const Text('Abbrechen'),
+				  ),
+				  const SizedBox(width: 8),
+				  FilledButton(
+					onPressed: _loading ? null : _submit,
+					child: _loading
+						? const SizedBox(
+							width: 18,
+							height: 18,
+							child: CircularProgressIndicator(strokeWidth: 2),
+						  )
+						: Text(_tabs.index == 0 ? 'Anmelden' : 'Registrieren'),
+				  ),
+				],
+			  ),
+			),
 		  ],
 		),
 	  ),
-	  actions: [
-		TextButton(
-		  onPressed: _loading ? null : () => Navigator.pop(context),
-		  child: const Text('Abbrechen'),
-		),
-		FilledButton(
-		  onPressed: _loading ? null : _submit,
-		  child: _loading
-			  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-			  : Text(_tabs.index == 0 ? 'Anmelden' : 'Registrieren'),
-		),
-	  ],
 	);
   }
 }

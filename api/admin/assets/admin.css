@@ -1,103 +1,201 @@
-/* ===== SWS Admin Dashboard – CSS ===== */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+﻿/* ===== Layout ===== */
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%;margin:0;padding:0}
+body.sws-body{background:var(--body-background);color:var(--body-color);font-family:Segoe UI,system-ui,sans-serif;font-size:14px}
 
-:root {
-  --bg:       #0f1117;
-  --surface:  #1a1d27;
-  --border:   #2d3147;
-  --accent:   #f5a623;
-  --text:     #e2e8f0;
-  --muted:    #8892a4;
-  --danger:   #e15759;
-  --success:  #59a14f;
-  --sidebar-w: 220px;
+.sws-layout{display:flex;height:100vh;overflow:hidden}
+
+/* ===== Sidebar ===== */
+.sws-sidebar{width:220px;min-width:220px;background:var(--default-background);border-right:1px solid var(--sws-border);display:flex;flex-direction:column;transition:width .2s;overflow:hidden}
+.sws-sidebar.collapsed{width:54px}
+.sws-sidebar.collapsed .sws-sidebar-logo span:last-child,
+.sws-sidebar.collapsed .sws-nav-link span:not([class*="mif"]){display:none}
+
+.sws-sidebar-logo{display:flex;align-items:center;gap:10px;padding:14px 16px;font-size:16px;font-weight:600;border-bottom:1px solid var(--sws-border);white-space:nowrap}
+.sws-sidebar-logo .mif-sun{font-size:22px}
+
+.sws-nav{list-style:none;margin:0;padding:8px 0;flex:1;overflow-y:auto}
+.sws-nav-link{display:flex;align-items:center;gap:10px;padding:9px 16px;color:var(--sws-text-muted);text-decoration:none;white-space:nowrap;border-radius:4px;margin:1px 6px;transition:background .15s,color .15s}
+.sws-nav-link:hover{background:var(--selected-item-background);color:var(--sws-text)}
+.sws-nav-link.active{background:#0078d4;color:#fff}
+.sws-nav-link [class*="mif"]{font-size:17px;width:22px;text-align:center;flex-shrink:0}
+.sws-nav-divider{height:1px;background:var(--sws-border);margin:6px 16px}
+.sws-nav-spacer{flex:1}
+.sws-nav-logout{color:#e74c3c !important}
+.sws-nav-logout:hover{background:#3d1515 !important}
+
+/* ===== Content area ===== */
+.sws-content{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+.sws-appbar{height:48px;background:var(--card-header-background, #282c35);border-bottom:1px solid var(--sws-border);display:flex;align-items:center;gap:12px;padding:0 16px;flex-shrink:0}
+.sws-hamburger{background:none;border:none;color:var(--sws-text-muted);cursor:pointer;padding:4px 6px;font-size:18px;line-height:1;border-radius:3px}
+.sws-hamburger:hover{background:var(--selected-item-background);color:var(--sws-text)}
+.sws-appbar-title{font-size:15px;font-weight:600;color:var(--sws-text)}
+
+.sws-page-wrap{flex:1;overflow-y:auto;padding:24px 28px}
+
+/* ===== Sections ===== */
+.sws-section-header{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.sws-section-title{margin:0;font-size:18px;font-weight:600;flex:1}
+.sws-btn-row{display:flex;gap:8px;margin-top:12px}
+
+/* ===== Tables ===== */
+.sws-table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--sws-border);vertical-align:middle}
+th{background:var(--card-header-background,#282c35);font-weight:600;color:var(--sws-text-muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+tr:hover td{background:var(--selected-row-background)}
+.sws-actions{display:flex;gap:6px}
+.sws-actions button{padding:3px 10px;font-size:12px}
+
+/* ===== Badges ===== */
+.badge-error{background:#c0392b;color:#fff;border-radius:3px;padding:1px 6px;font-size:11px}
+.badge-warning{background:#e67e22;color:#fff;border-radius:3px;padding:1px 6px;font-size:11px}
+.badge-info{background:#2980b9;color:#fff;border-radius:3px;padding:1px 6px;font-size:11px}
+
+/* ===== Live-Karten ===== */
+.sws-live-ts{color:var(--sws-text-muted);font-size:12px;margin-bottom:14px}
+.sws-live-grid{display:flex;flex-wrap:wrap;gap:14px;margin-top:8px}
+.sws-live-box{background:var(--sws-bg-card);border:1px solid var(--sws-border);border-radius:6px;padding:14px 16px;min-width:140px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px}
+.sws-live-box .val{font-size:26px;font-weight:700;color:var(--sws-accent);line-height:1.1}
+.sws-live-box .val.text{font-size:16px;color:var(--sws-accent)}
+.sws-live-box .unit{font-size:13px;color:var(--sws-text-muted)}
+.sws-live-box .lbl{font-size:12px;color:var(--sws-text-muted);text-align:center}
+.sws-gauge-box{background:var(--sws-bg-card);border:1px solid var(--sws-border);border-radius:6px;padding:10px 12px;min-width:200px;text-align:center}
+.sws-gauge-box .analog-gauge{margin:0 auto}
+.sws-gauge-box .analog-gauge .value{font-size:22px !important;font-weight:700 !important;fill:#f0a500 !important;color:#f0a500 !important}
+.sws-gauge-box .analog-gauge .label{font-size:14px !important;font-weight:600 !important;fill:#ccc !important;color:#ccc !important}
+.sws-gauge-box .analog-gauge .label-min,.sws-gauge-box .analog-gauge .label-max{font-size:12px !important;fill:#aaa !important;color:#aaa !important}
+.sws-gauge-box .analog-gauge .value-marks .mark{font-size:11px !important;fill:#bbb !important;color:#bbb !important}
+
+/* Temperatur -30…60°C (Bogen 250°)
+   kalt=blau links, angenehm=grün oben (18-24°C = 133-150°), heiß=rot rechts
+   Position = (Wert - min) / (max - min) * 250deg
+   -30→0°  0°C→83°  18°C→133°  24°C→150°  30°C→167°  60°C→250° */
+.gauge-temp .gauge{background:conic-gradient(from 235deg,
+  #1e88e5   0deg  83deg,   /* -30…0°C   kalt blau        */
+  #4fc3f7  83deg 133deg,   /*  0…18°C   kühl hellblau     */
+  #66bb6a 133deg 150deg,   /* 18…24°C   angenehm grün     */
+  #ffee58 150deg 183deg,   /* 24…30°C   warm gelb         */
+  #ffa726 183deg 220deg,   /* 30…45°C   heiß orange       */
+  #ef5350 220deg 250deg,   /* 45…60°C   sehr heiß rot     */
+  #0000   250deg) !important}
+
+/* Pooltemperatur -10…50°C (Bogen 250°)
+   angenehm zum Schwimmen: 24–28°C = 154°–179°
+   Position = (Wert+10) / 60 * 250deg */
+.gauge-pool .gauge{background:conic-gradient(from 235deg,
+  #1e88e5   0deg 117deg,   /* -10…18°C  kalt blau        */
+  #4fc3f7 117deg 154deg,   /*  18…24°C  kühl hellblau    */
+  #66bb6a 154deg 179deg,   /*  24…28°C  angenehm grün    */
+  #ffee58 179deg 208deg,   /*  28…34°C  warm gelb        */
+  #ffa726 208deg 233deg,   /*  34…44°C  heiß orange      */
+  #ef5350 233deg 250deg,   /*  44…50°C  sehr heiß rot    */
+  #0000   250deg) !important}
+
+/* Taupunkt -10…30°C (Bogen 250°)
+   0°C→62°  8°C→112°  16°C→162° */
+.gauge-dew .gauge{background:conic-gradient(from 235deg,
+  #1e88e5   0deg  62deg,
+  #4fc3f7  62deg 112deg,
+  #66bb6a 112deg 162deg,
+  #ffee58 162deg 210deg,
+  #ef5350 210deg 250deg,
+  #0000   250deg) !important}
+
+/* Luftfeuchte 0…100% (Bogen 250°)
+   30%→75°  40%→100°  60%→150°  70%→175°
+   trocken=blau, angenehm=grün, feucht=orange/rot */
+.gauge-hum .gauge{background:conic-gradient(from 235deg,
+  #1e88e5   0deg  75deg,   /*  0…30%  zu trocken blau    */
+  #80cbc4  75deg 100deg,   /* 30…40%  Übergang türkis    */
+  #66bb6a 100deg 150deg,   /* 40…60%  angenehm grün      */
+  #ffee58 150deg 175deg,   /* 60…70%  Übergang gelb      */
+  #ffa726 175deg 215deg,   /* 70…86%  feucht orange      */
+  #ef5350 215deg 250deg,   /* 86…100% zu feucht rot      */
+  #0000   250deg) !important}
+
+/* Batterie 0…100% (Bogen 250°)
+   15%→37°  30%→75°  50%→125° */
+.gauge-bat .gauge{background:conic-gradient(from 235deg,
+  #ef5350   0deg  37deg,   /*  0…15%  kritisch rot       */
+  #ffa726  37deg  75deg,   /* 15…30%  niedrig orange     */
+  #ffee58  75deg 125deg,   /* 30…50%  mittel gelb        */
+  #66bb6a 125deg 250deg,   /* 50…100% gut grün           */
+  #0000   250deg) !important}
+
+/* ===== Modals ===== */
+.sws-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:9999}
+.sws-dialog{background:var(--sws-bg-deep);border:1px solid var(--sws-border);border-radius:6px;width:100%;max-width:520px;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.dialog-title{padding:14px 18px;font-size:16px;font-weight:600;border-bottom:1px solid var(--sws-border);color:var(--sws-text)}
+.dialog-content{padding:18px;max-height:70vh;overflow-y:auto}
+.dialog-actions{padding:12px 18px;border-top:1px solid var(--sws-border);display:flex;gap:8px;justify-content:flex-end}
+
+/* ===== Nachrichten ===== */
+.sws-msg-err{color:#e74c3c;font-size:13px;margin-bottom:8px;display:none}
+.sws-msg-err:not(:empty){display:block}
+.sws-msg-ok{color:#2ecc71;font-size:13px;margin-top:6px;display:none}
+.sws-msg-ok:not(:empty){display:block}
+
+/* ===== Forms ===== */
+.sws-fieldset{border:1px solid var(--sws-border);border-radius:4px;padding:12px 14px;margin-bottom:12px}
+.sws-fieldset legend{color:var(--sws-text-muted);font-size:12px;padding:0 6px}
+.sws-form-wrap{max-width:700px}
+.form-group{margin-bottom:10px}
+.form-group label{display:block;margin-bottom:4px;font-size:13px;color:var(--sws-text-muted);font-weight:500}
+.metro-input{width:100%;background:var(--input-background);border:1px solid var(--input-border-color);border-radius:var(--input-border-radius,4px);color:var(--input-color);padding:7px 10px;font-size:13px}
+.metro-input:focus{outline:none;border-color:#0078d4;box-shadow:0 0 0 2px rgba(0,120,212,.25)}
+.select{background:var(--input-background);border:1px solid var(--input-border-color);border-radius:4px;color:var(--input-color);padding:6px 8px;font-size:13px}
+.remark{font-size:12px;color:var(--sws-text-muted);margin:4px 0 10px}
+code{background:var(--card-header-background);border:1px solid var(--sws-border);border-radius:3px;padding:1px 5px;font-size:12px;color:var(--sws-text);font-family:monospace}
+
+/* ===== Filter-Bar ===== */
+.sws-filter-bar{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+
+/* ===== Eigene SWS Custom Properties (ergänzen Metro .dark-side Variablen) ===== */
+/* Metro UI Dark-Theme wird über .dark-side am body aktiviert.                    */
+/* Hier nur noch SWS-spezifische Farben die Metro nicht kennt.                    */
+.sws-body, .sws-login-page {
+  --sws-accent:       #f0a500;
+  --sws-bg-card:      var(--card-background, #2b2d30);
+  --sws-bg-deep:      var(--default-background, #1e1f22);
+  --sws-border:       var(--border-color, #4a4d51);
+  --sws-text:         var(--default-color, #dbdfe7);
+  --sws-text-muted:   var(--body-color-secondary, #c0c0c0);
 }
 
-body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+.sws-ota-grid{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:20px;align-items:flex-start}
+.sws-ota-card{background:var(--sws-bg-card);border:1px solid var(--sws-border);border-radius:6px;padding:16px 20px;min-width:220px;flex:0 0 auto}
+.sws-ota-card h4{margin:0 0 4px;font-size:15px;font-weight:600;color:var(--sws-text)}
+.sws-ota-card .sws-ota-version{font-size:24px;font-weight:700;color:var(--sws-accent);line-height:1.2;margin-bottom:6px}
+.sws-ota-card .sws-ota-meta{font-size:12px;color:var(--sws-text-muted);margin-bottom:4px}
+.sws-ota-card .sws-ota-path{font-size:11px;color:var(--sws-text-muted);opacity:.7;font-family:monospace;word-break:break-all}
+.sws-ota-card .sws-ota-warn{font-size:12px;color:var(--sws-accent);margin-top:4px}
+.sws-ota-panel{margin-top:0;border:1px solid var(--sws-border);border-radius:6px;background:var(--sws-bg-card);flex:1;min-width:300px}
+.sws-ota-panel .card-header{background:var(--card-header-background,#282c35);padding:10px 16px;font-weight:600;font-size:14px;
+  border-bottom:1px solid var(--sws-border);border-radius:6px 6px 0 0;color:var(--sws-text)}
+.sws-ota-panel .card-content{padding:16px;background:var(--sws-bg-card);border-radius:0 0 6px 6px}
+.sws-ota-wrap{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start}
 
-/* ---- Login ---- */
-.login-page { display: flex; align-items: center; justify-content: center; }
-.login-card  { background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-               padding: 2.5rem; width: 360px; display: flex; flex-direction: column; gap: 1.2rem; }
-.login-card h1 { font-size: 1.6rem; text-align: center; }
-.login-card label { display: flex; flex-direction: column; gap: .35rem; font-size: .85rem; color: var(--muted); }
-.login-card input { padding: .55rem .8rem; background: var(--bg); border: 1px solid var(--border);
-                    border-radius: 6px; color: var(--text); font-size: 1rem; }
-.login-card button { padding: .65rem; background: var(--accent); border: none; border-radius: 6px;
-                     cursor: pointer; font-weight: 600; font-size: 1rem; }
-.error { color: var(--danger); font-size: .88rem; }
+/* ===== Historie-Charts ===== */
+.sws-history-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:18px;margin-top:16px}
+.sws-history-card{background:var(--sws-bg-card);border:1px solid var(--sws-border);border-radius:6px;padding:14px 16px}
+.sws-history-title{font-size:13px;font-weight:600;color:var(--sws-text-muted);margin-bottom:8px}
+.sws-history-card canvas{width:100%!important;max-height:220px}
 
-/* ---- Layout ---- */
-.sidebar { position: fixed; top: 0; left: 0; width: var(--sidebar-w); height: 100vh;
-           background: var(--surface); border-right: 1px solid var(--border);
-           display: flex; flex-direction: column; padding: 1.5rem 1rem; gap: .4rem; }
-.logo    { font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem; color: var(--accent); }
-.nav-link { display: block; padding: .55rem .75rem; border-radius: 6px; color: var(--muted);
-            text-decoration: none; font-size: .9rem; transition: background .15s, color .15s; }
-.nav-link:hover, .nav-link.active { background: var(--border); color: var(--text); }
-.nav-link.logout { margin-top: auto; color: var(--danger); }
+/* ===== Login-Seite ===== */
+body.sws-login-page{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--body-background)}
+.sws-login-wrap{width:100%;max-width:360px;padding:20px}
+.sws-login-card{background:var(--sws-bg-card);border:1px solid var(--sws-border);border-radius:6px;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.4)}
+.sws-login-header{display:flex;align-items:center;gap:10px;background:var(--card-header-background);padding:14px 18px;font-size:16px;font-weight:600;border-bottom:1px solid var(--sws-border);color:var(--sws-text)}
+.sws-login-header .icon{font-size:22px}
 
-.content { margin-left: var(--sidebar-w); padding: 2rem; }
-.section  { max-width: 960px; }
-.section h2 { font-size: 1.3rem; margin-bottom: 1.2rem; }
-.hidden   { display: none !important; }
-
-/* ---- Tabellen ---- */
-table  { width: 100%; border-collapse: collapse; font-size: .88rem; }
-th, td { padding: .6rem .8rem; text-align: left; border-bottom: 1px solid var(--border); }
-th     { color: var(--muted); font-weight: 600; }
-tr:hover td { background: var(--surface); }
-.btn-del  { background: transparent; border: 1px solid var(--danger); color: var(--danger);
-            border-radius: 4px; padding: .25rem .6rem; cursor: pointer; font-size: .8rem; }
-.btn-del:hover { background: var(--danger); color: #fff; }
-.btn-add  { background: var(--accent); border: none; border-radius: 6px; padding: .5rem 1rem;
-            cursor: pointer; font-weight: 600; margin-bottom: 1rem; }
-
-/* ---- Live-Grid ---- */
-.live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; margin-top: 1.2rem; }
-.live-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-.live-card .val  { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
-.live-card .unit { font-size: .8rem; color: var(--muted); }
-.live-card .lbl  { font-size: .85rem; margin-top: .3rem; color: var(--text); }
-
-/* ---- Modal ---- */
-.modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex;
-         align-items: center; justify-content: center; z-index: 100; }
-.modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-             padding: 2rem; width: 420px; display: flex; flex-direction: column; gap: 1rem; }
-.modal-box h3 { font-size: 1.1rem; }
-.modal-box label { display: flex; flex-direction: column; gap: .3rem; font-size: .85rem; color: var(--muted); }
-.modal-box input[type=text], .modal-box input[type=number] {
-  padding: .5rem .7rem; background: var(--bg); border: 1px solid var(--border);
-  border-radius: 6px; color: var(--text); font-size: .95rem; }
-.modal-actions { display: flex; gap: .75rem; justify-content: flex-end; margin-top: .5rem; }
-.btn-save { background: var(--success); border: none; border-radius: 6px; padding: .5rem 1.1rem;
-            cursor: pointer; font-weight: 600; color: #fff; }
-
-/* ---- Credentials-Formular ---- */
-.section-hint { color: var(--muted); font-size: .88rem; margin-bottom: 1.5rem; line-height: 1.5; }
-.section-hint code { background: var(--bg); border: 1px solid var(--border); padding: .1rem .4rem; border-radius: 4px; font-size: .82rem; }
-.cred-form-wrap { max-width: 620px; }
-.cred-form fieldset { border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.2rem 1.2rem; margin-bottom: 1.2rem; }
-.cred-form legend { color: var(--muted); font-size: .8rem; font-weight: 600; padding: 0 .4rem; text-transform: uppercase; letter-spacing: .04em; }
-.cred-form label { display: flex; flex-direction: column; gap: .3rem; font-size: .85rem; color: var(--muted); margin-top: .75rem; }
-.cred-form input { padding: .55rem .8rem; background: var(--bg); border: 1px solid var(--border);
-                   border-radius: 6px; color: var(--text); font-size: .95rem; }
-.cred-form input:focus { outline: none; border-color: var(--accent); }
-.cred-form .hint { font-size: .76rem; color: var(--muted); }
-.cred-form .req { color: var(--danger); }
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
-.btn-row { display: flex; justify-content: flex-end; margin-top: .5rem; }
-.msg-ok  { color: var(--success); background: rgba(89,161,79,.12); border: 1px solid var(--success);
-           border-radius: 6px; padding: .6rem .9rem; font-size: .88rem; margin-bottom: .8rem; }
-.msg-err { color: var(--danger);  background: rgba(225,87,89,.12);  border: 1px solid var(--danger);
-           border-radius: 6px; padding: .6rem .9rem; font-size: .88rem; margin-bottom: .8rem; }
-
-/* ---- Fehler-Log ---- */
-.errorlog-filter { display: flex; gap: .75rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
-.errorlog-filter select { padding: .45rem .7rem; background: var(--bg); border: 1px solid var(--border);
-                          border-radius: 6px; color: var(--text); font-size: .88rem; }
-.badge { display: inline-block; padding: .15rem .5rem; border-radius: 4px; font-size: .75rem; font-weight: 700; }
-.badge-error   { background: rgba(225,87,89,.2);  color: var(--danger); }
-.badge-warning { background: rgba(245,166,35,.2); color: var(--accent); }
-.badge-info    { background: rgba(89,161,79,.2);  color: var(--success); }
+/* Rohdaten-Tabelle */
+.sws-history-raw{background:var(--sws-card);border:1px solid var(--sws-border);border-radius:6px;padding:16px;margin-top:24px;width:100%;box-sizing:border-box}
+.sws-history-raw-title{font-size:.85rem;font-weight:600;color:var(--sws-muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em}
+.sws-raw-scroll{overflow-x:auto;width:100%}
+.sws-raw-table{width:100%;border-collapse:collapse;font-size:.82rem;min-width:600px}
+.sws-raw-table th{text-align:left;padding:6px 12px;border-bottom:2px solid var(--sws-border);color:var(--sws-muted);white-space:nowrap;font-weight:600}
+.sws-raw-table td{padding:5px 12px;border-bottom:1px solid var(--sws-border);color:var(--sws-text);white-space:nowrap}
+.sws-raw-ts{color:var(--sws-muted)!important;font-size:.8rem}
+.sws-raw-table tbody tr:hover{background:rgba(255,255,255,.03)}

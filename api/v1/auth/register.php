@@ -42,7 +42,7 @@ if ($dup->fetch()) {
 
 // Benutzer anlegen
 $hash = password_hash($pass, PASSWORD_BCRYPT);
-$db->prepare('INSERT INTO users (email, password_hash) VALUES (?, ?)')->execute([$email, $hash]);
+$db->prepare('INSERT INTO users (email, password) VALUES (?, ?)')->execute([$email, $hash]);
 $userId = (int)$db->lastInsertId();
 
 // Einladungscode als verwendet markieren
@@ -50,4 +50,8 @@ $db->prepare('UPDATE invite_codes SET used_at = NOW(), used_by = ? WHERE id = ?'
    ->execute([$userId, $invRow['id']]);
 
 $token = jwtEncode(['sub' => $userId, 'email' => $email]);
-sendJson(200, ['token' => $token]);
+sendJson(200, [
+	'id'    => (string)$userId,
+	'email' => $email,
+	'token' => $token,
+]);

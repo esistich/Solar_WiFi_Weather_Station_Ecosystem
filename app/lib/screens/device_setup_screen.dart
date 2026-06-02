@@ -3,13 +3,15 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../models/models.dart';
 import '../services/services.dart';
+import '../widgets/weather_utils.dart';
 
 /// Geräte-Setup in drei Schritten:
 ///  1. Manuell (nur API-URL) oder Soft-AP
 ///  2. Soft-AP: Mit ESP-Hotspot verbinden → Config senden
 ///  3. Gerät benennen und speichern
 class DeviceSetupScreen extends StatefulWidget {
-  const DeviceSetupScreen({super.key});
+  final Device? device; // gesetzt = Edit-Modus
+  const DeviceSetupScreen({super.key, this.device});
 
   @override
   State<DeviceSetupScreen> createState() => _DeviceSetupScreenState();
@@ -22,12 +24,31 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   String? _error;
 
   // Formular-Felder
-  final _nameCtrl     = TextEditingController(text: 'Meine Station');
-  final _apiHostCtrl  = TextEditingController();
-  final _apiPathCtrl  = TextEditingController(text: '/sws/api/v1/data');
-  final _apiUserCtrl  = TextEditingController();
-  final _apiPassCtrl  = TextEditingController();
-  bool _apiHttps      = true;
+  final _nameCtrl        = TextEditingController(text: 'Meine Station');
+  final _apiHostCtrl     = TextEditingController();
+  final _apiPathCtrl     = TextEditingController(text: '/sws/api/v1/data');
+  final _apiUserCtrl     = TextEditingController();
+  final _apiPassCtrl     = TextEditingController();
+  final _stationSlugCtrl = TextEditingController();
+  bool _apiHttps         = true;
+  int  _iconIndex        = 0; // Geraete-Avatar
+
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.device;
+    if (d != null) {
+      _nameCtrl.text        = d.name;
+      _apiHostCtrl.text     = d.apiHost;
+      _apiPathCtrl.text     = d.apiPath;
+      _apiUserCtrl.text     = d.apiUser;
+      _apiPassCtrl.text     = d.apiPassword;
+      _stationSlugCtrl.text = d.stationSlug;
+      _apiHttps             = d.apiHttps;
+      _iconIndex            = d.iconIndex;
+      _step = 2; // direkt in Formular-Schritt
+    }
+  }
 
   // Soft-AP spezifisch
   final _ssidCtrl    = TextEditingController();
@@ -36,7 +57,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
 
   @override
   void dispose() {
-	for (final c in [_nameCtrl, _apiHostCtrl, _apiPathCtrl, _apiUserCtrl, _apiPassCtrl, _ssidCtrl, _passCtrl]) {
+	for (final c in [_nameCtrl, _apiHostCtrl, _apiPathCtrl, _apiUserCtrl, _apiPassCtrl, _stationSlugCtrl, _ssidCtrl, _passCtrl]) {
 	  c.dispose();
 	}
 	super.dispose();
@@ -46,7 +67,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   Widget build(BuildContext context) {
 	return Scaffold(
 	  appBar: AppBar(
-		title: const Text('Gerät hinzufügen'),
+		title: Text(widget.device != null ? 'Gerät bearbeiten' : 'Gerät hinzufügen'),
 		leading: _step > 0
 			? IconButton(
 				icon: const Icon(Icons.arrow_back),
@@ -87,13 +108,16 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
 		),
 	  2 => _ManualSetup(
 		  key: const ValueKey(2),
-		  nameCtrl:    _nameCtrl,
-		  apiHostCtrl: _apiHostCtrl,
-		  apiPathCtrl: _apiPathCtrl,
-		  apiUserCtrl: _apiUserCtrl,
-		  apiPassCtrl: _apiPassCtrl,
+		  nameCtrl:        _nameCtrl,
+		  apiHostCtrl:     _apiHostCtrl,
+		  apiPathCtrl:     _apiPathCtrl,
+		  apiUserCtrl:     _apiUserCtrl,
+		  apiPassCtrl:     _apiPassCtrl,
+		  stationSlugCtrl: _stationSlugCtrl,
 		  apiHttps:    _apiHttps,
 		  onHttpsChanged: (v) => setState(() => _apiHttps = v),
+		  iconIndex: _iconIndex,
+		  onIconChanged: (i) => setState(() => _iconIndex = i),
 		  busy:  _busy,
 		  error: _error,
 		  onSave: _saveManual,
@@ -157,17 +181,25 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   }
 
   Future<void> _addDevice() async {
+	final existing = widget.device;
 	final device = Device(
-	  id:          const Uuid().v4(),
+	  id:          existing?.id ?? const Uuid().v4(),
 	  name:        _nameCtrl.text.trim().isEmpty ? 'Station' : _nameCtrl.text.trim(),
 	  apiHost:     _apiHostCtrl.text.trim(),
 	  apiPath:     _apiPathCtrl.text.trim(),
 	  apiHttps:    _apiHttps,
 	  apiUser:     _apiUserCtrl.text.trim(),
 	  apiPassword: _apiPassCtrl.text,
+	  stationSlug: _stationSlugCtrl.text.trim(),
+	  iconIndex:   _iconIndex,
 	);
 	if (!mounted) return;
-	await context.read<DeviceProvider>().addDevice(device);
+	final provider = context.read<DeviceProvider>();
+	if (existing != null) {
+	  await provider.updateDevice(device);
+	} else {
+	  await provider.addDevice(device);
+	}
   }
 
   void _showSnack(String msg) {
@@ -371,8 +403,11 @@ class _ManualSetup extends StatelessWidget {
   final TextEditingController apiPathCtrl;
   final TextEditingController apiUserCtrl;
   final TextEditingController apiPassCtrl;
+  final TextEditingController stationSlugCtrl;
   final bool apiHttps;
   final ValueChanged<bool> onHttpsChanged;
+  final int iconIndex;
+  final ValueChanged<int> onIconChanged;
   final bool busy;
   final String? error;
   final VoidCallback onSave;
@@ -384,8 +419,11 @@ class _ManualSetup extends StatelessWidget {
 	required this.apiPathCtrl,
 	required this.apiUserCtrl,
 	required this.apiPassCtrl,
+	required this.stationSlugCtrl,
 	required this.apiHttps,
 	required this.onHttpsChanged,
+	required this.iconIndex,
+	required this.onIconChanged,
 	required this.busy,
 	required this.error,
 	required this.onSave,
@@ -417,7 +455,7 @@ class _ManualSetup extends StatelessWidget {
 			decoration: const InputDecoration(hintText: '/sws/api/v1/data'),
 		  ),
 		  const SizedBox(height: 12),
-		  _label('API-Benutzername (optional)')
+		  _label('API-Benutzername (optional)'),
 		  TextField(
 			controller: apiUserCtrl,
 			decoration: const InputDecoration(hintText: 'Leer lassen wenn keine Auth'),
@@ -430,11 +468,57 @@ class _ManualSetup extends StatelessWidget {
 			decoration: const InputDecoration(hintText: '••••••••'),
 		  ),
 		  const SizedBox(height: 12),
+		  _label('Station-Slug (fuer Verlaufsdaten)'),
+		  TextField(
+			controller: stationSlugCtrl,
+			decoration: const InputDecoration(hintText: 'z.B. waggum'),
+		  ),
+		  const SizedBox(height: 12),
 		  SwitchListTile(
 			value: apiHttps,
 			onChanged: onHttpsChanged,
 			title: const Text('HTTPS verwenden'),
 			contentPadding: EdgeInsets.zero,
+		  ),
+		  const SizedBox(height: 16),
+		  _label('Geraete-Symbol'),
+		  const SizedBox(height: 8),
+		  Wrap(
+			spacing: 10,
+			runSpacing: 10,
+			children: [
+			  for (var i = 0; i < WeatherUtils.deviceIcons.length; i++)
+				GestureDetector(
+				  onTap: () => onIconChanged(i),
+				  child: AnimatedContainer(
+					duration: const Duration(milliseconds: 200),
+					width: 52,
+					height: 52,
+					decoration: BoxDecoration(
+					  color: i == iconIndex
+						  ? Theme.of(context).colorScheme.primaryContainer
+						  : Theme.of(context).colorScheme.surfaceContainerHighest,
+					  borderRadius: BorderRadius.circular(12),
+					  border: i == iconIndex
+						  ? Border.all(
+							  color: Theme.of(context).colorScheme.primary,
+							  width: 2,
+							)
+						  : null,
+					),
+					child: Tooltip(
+					  message: WeatherUtils.deviceIconLabels[i],
+					  child: Icon(
+						WeatherUtils.deviceIcons[i],
+						size: 26,
+						color: i == iconIndex
+							? Theme.of(context).colorScheme.primary
+							: Theme.of(context).colorScheme.onSurfaceVariant,
+					  ),
+					),
+				  ),
+				),
+			],
 		  ),
 		  if (error != null) ...[
 			const SizedBox(height: 12),
@@ -450,7 +534,7 @@ class _ManualSetup extends StatelessWidget {
 					child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
 				  )
 				: const Icon(Icons.check),
-			label: Text(busy ? 'Speichere…' : 'Gerät speichern'),
+			label: Text(busy ? 'Speichere...' : 'Geraet speichern'),
 		  ),
 		],
 	  ),

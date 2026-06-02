@@ -8,8 +8,9 @@
 
 declare(strict_types=1);
 
-$db   = getDb();
-$body = json_decode(file_get_contents('php://input'), true) ?? [];
+$db  = getDb();
+$raw = file_get_contents('php://input');
+$body = json_decode($raw ?: '{}', true) ?? [];
 
 $email = trim($body['email']    ?? '');
 $pass  = trim($body['password'] ?? '');
@@ -18,13 +19,17 @@ if (!$email || !$pass) {
 	sendJson(400, ['error' => 'email und password erforderlich']);
 }
 
-$stmt = $db->prepare('SELECT id, email, password_hash FROM users WHERE email = ? LIMIT 1');
+$stmt = $db->prepare('SELECT id, email, password FROM users WHERE email = ? LIMIT 1');
 $stmt->execute([$email]);
 $user = $stmt->fetch();
 
-if (!$user || !password_verify($pass, $user['password_hash'])) {
+if (!$user || !password_verify($pass, $user['password'])) {
 	sendJson(401, ['error' => 'Ungültige Anmeldedaten']);
 }
 
 $token = jwtEncode(['sub' => $user['id'], 'email' => $user['email']]);
-sendJson(200, ['token' => $token]);
+sendJson(200, [
+	'id'    => (string)$user['id'],
+	'email' => $user['email'],
+	'token' => $token,
+]);

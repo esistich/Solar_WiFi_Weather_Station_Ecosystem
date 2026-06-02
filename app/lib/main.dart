@@ -24,12 +24,16 @@ Future<void> main() async {
   final deviceProvider = DeviceProvider();
   await deviceProvider.loadDevices();
 
+  final themeProvider = ThemeProvider();
+  await themeProvider.init();
+
   runApp(
 	MultiProvider(
 	  providers: [
 		ChangeNotifierProvider.value(value: authService),
 		ChangeNotifierProvider.value(value: deviceProvider),
 		Provider.value(value: pushService),
+		ChangeNotifierProvider.value(value: themeProvider),
 	  ],
 	  child: const SwsApp(),
 	),
@@ -41,9 +45,11 @@ class SwsApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+	final themeMode = context.watch<ThemeProvider>().mode;
 	return MaterialApp(
 	  title: 'SWS Companion',
 	  debugShowCheckedModeBanner: false,
+	  themeMode: themeMode,
 	  theme: ThemeData(
 		useMaterial3: true,
 		colorScheme: ColorScheme.fromSeed(

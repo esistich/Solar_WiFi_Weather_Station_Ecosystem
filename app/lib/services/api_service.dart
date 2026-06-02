@@ -24,23 +24,27 @@ if (token == null || token.isEmpty) return {};
 return {HttpHeaders.authorizationHeader: 'Bearer $token'};
   }
 
-  /// Laedt den aktuellen Messwert (GET /v1/data – oeffentlich).
+ /// Laedt den aktuellen Messwert (GET /v1/data – oeffentlich).
   Future<Measurement> fetchLatest(Device device) async {
-final uri = Uri.parse(device.apiUrl);
-final response = await _client
-.get(uri, headers: _basicAuthHeaders(device))
-.timeout(const Duration(seconds: 10));
+    // Station-Slug als Query-Parameter mitsenden damit die API die richtige Station zurueckgibt
+    final base = Uri.parse(device.apiUrl);
+    final uri = device.stationSlug.isNotEmpty
+        ? base.replace(queryParameters: {'station': device.stationSlug})
+        : base;
+    final response = await _client
+        .get(uri, headers: _basicAuthHeaders(device))
+        .timeout(const Duration(seconds: 10));
 
-if (response.statusCode != 200) {
-  throw ApiException('HTTP ${response.statusCode}', uri.toString());
-}
+    if (response.statusCode != 200) {
+      throw ApiException('HTTP ${response.statusCode}', uri.toString());
+    }
 
-final json = jsonDecode(response.body);
-if (json is! Map<String, dynamic>) {
-  throw ApiException('Ungueltiges JSON-Format', uri.toString());
-}
+    final json = jsonDecode(response.body);
+    if (json is! Map<String, dynamic>) {
+      throw ApiException('Ungueltiges JSON-Format', uri.toString());
+    }
 
-return Measurement.fromJson(json);
+    return Measurement.fromJson(json);
   }
 
   /// Laedt Verlaufsdaten (GET /v1/history – JWT Bearer erforderlich).
@@ -53,6 +57,7 @@ final now = DateTime.now();
 final from = now.subtract(Duration(hours: hours));
 
 final uri = Uri.parse(device.historyUrl).replace(queryParameters: {
+  if (device.stationSlug.isNotEmpty) 'station': device.stationSlug,
   'from':  _fmtDate(from),
   'to':    _fmtDate(now),
   'limit': '500',
@@ -87,6 +92,44 @@ return rows
   '${dt.year.toString().padLeft(4, '0')}-'
   '${dt.month.toString().padLeft(2, '0')}-'
   '${dt.day.toString().padLeft(2, '0')}';
+
+  /// Aktualisiert Name und Slug einer Station (PATCH /v1/admin/stations – JWT).
+  /// [currentSlug] = aktueller Slug zur Identifikation,
+  /// [name] = neuer Anzeigename, [newSlug] = neuer Slug.
+  Future<Map<String, dynamic>> updateStation(
+    Device device, {
+    required String currentSlug,
+    required String name,
+    required String newSlug,
+    required String bearerToken,
+  }) async {
+    final uri = Uri.parse(device.historyUrl)
+        .replace(path: _adminStationsPath(device), queryParameters: {});
+    final response = await _client
+        .patch(
+          uri,
+          headers: {
+            ..._bearerHeaders(bearerToken),
+            HttpHeaders.contentTypeHeader: 'application/json',
+          },
+          body: jsonEncode({'slug': currentSlug, 'name': name, 'new_slug': newSlug}),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != 200) {
+      throw ApiException('HTTP ${response.statusCode}', uri.toString());
+    }
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return json['station'] as Map<String, dynamic>;
+  }
+
+  /// Liefert den Pfad zu PATCH /v1/admin/stations relativ zur History-URL.
+  String _adminStationsPath(Device device) {
+    final base = Uri.parse(device.historyUrl);
+    // history liegt unter /v1/history, admin/stations unter /v1/admin/stations
+    final parent = base.path.replaceFirst(RegExp(r'/history$'), '');
+    return '$parent/admin/stations';
+  }
 
   void dispose() => _client.close();
 }

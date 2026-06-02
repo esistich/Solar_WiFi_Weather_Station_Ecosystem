@@ -8,8 +8,10 @@ class Device {
   final String apiPath;    // z.B. "/api/data.php"
   final bool apiHttps;
   final bool active;
-  final String apiUser;     // Basic-Auth Benutzername (leer = kein Auth)
-  final String apiPassword; // Basic-Auth Passwort
+  final String apiUser;      // Basic-Auth Benutzername (leer = kein Auth)
+  final String apiPassword;  // Basic-Auth Passwort
+  final String stationSlug;  // Station-Slug fuer /v1/history?station=<slug>
+  final int iconIndex;       // Index in WeatherUtils.deviceIcons (0 = Haus)
 
   const Device({
 	required this.id,
@@ -20,6 +22,8 @@ class Device {
 	this.active = true,
 	this.apiUser = '',
 	this.apiPassword = '',
+	this.stationSlug = '',
+	this.iconIndex = 0,
   });
 
   String get apiUrl =>
@@ -47,6 +51,8 @@ class Device {
 	bool? active,
 	String? apiUser,
 	String? apiPassword,
+	String? stationSlug,
+	int? iconIndex,
   }) =>
 	  Device(
 		id: id,
@@ -57,6 +63,8 @@ class Device {
 		active: active ?? this.active,
 		apiUser: apiUser ?? this.apiUser,
 		apiPassword: apiPassword ?? this.apiPassword,
+		stationSlug: stationSlug ?? this.stationSlug,
+		iconIndex: iconIndex ?? this.iconIndex,
 	  );
 
   Map<String, dynamic> toJson() => {
@@ -68,6 +76,8 @@ class Device {
 		'active': active,
 		'apiUser': apiUser,
 		'apiPassword': apiPassword,
+		'stationSlug': stationSlug,
+		'iconIndex': iconIndex,
 	  };
 
   factory Device.fromJson(Map<String, dynamic> json) => Device(
@@ -79,6 +89,8 @@ class Device {
 		active: json['active'] as bool? ?? true,
 		apiUser: json['apiUser'] as String? ?? '',
 		apiPassword: json['apiPassword'] as String? ?? '',
+		stationSlug: json['stationSlug'] as String? ?? '',
+		iconIndex: json['iconIndex'] as int? ?? 0,
 	  );
 
   /// Serialisiert eine Liste von Geräten für SharedPreferences.

@@ -74,9 +74,6 @@ class _HomeScreenState extends State<HomeScreen> {
 				  padding: const EdgeInsets.only(bottom: 12),
 				  child: TileCard(
 					device: device,
-					measurement: provider.measurementFor(device.id),
-					loading: provider.isLoading(device.id),
-					error: provider.errorFor(device.id),
 					onTap: () => Navigator.push(
 					  context,
 					  MaterialPageRoute(

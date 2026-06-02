@@ -2,12 +2,15 @@
 'use strict';
 
 // ---- Navigation ----
-const sections = document.querySelectorAll('.section');
-const navLinks  = document.querySelectorAll('.nav-link[data-section]');
+const sections = document.querySelectorAll('.sws-section');
+const navLinks  = document.querySelectorAll('.sws-nav-link[data-section]');
 
 function showSection(id) {
-  sections.forEach(s => s.classList.toggle('hidden', s.id !== id));
+  sections.forEach(s => { s.style.display = s.id === id ? '' : 'none'; });
   navLinks.forEach(a => a.classList.toggle('active', a.dataset.section === id));
+  const titleEl  = document.getElementById('sws-page-title');
+  const activeLink = document.querySelector(`.sws-nav-link[data-section="${id}"]`);
+  if (titleEl && activeLink) titleEl.textContent = activeLink.textContent.trim();
   loaders[id]?.();
 }
 
@@ -17,17 +20,24 @@ navLinks.forEach(a => a.addEventListener('click', e => {
 }));
 
 // ---- API helper ----
+const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content ?? '';
+
 async function api(path, method = 'GET', body = null) {
-  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  const headers = { 'Content-Type': 'application/json' };
+  if (['POST','PATCH','DELETE','PUT'].includes(method)) headers['X-CSRF-Token'] = CSRF_TOKEN;
+  const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(`?action=api/${path}`, opts);
-  return r.json();
+  if (!r.ok) { console.error(`API ${path} HTTP ${r.status}`); return null; }
+  const json = await r.json();
+  if (json && json.error) { console.error(`API ${path} Fehler:`, json.error); return null; }
+  return json;
 }
 
 // ---- Tabellen-Helper ----
 function renderTable(targetId, columns, rows, actions) {
   const el = document.getElementById(targetId);
-  if (!rows.length) { el.innerHTML = '<p style="color:var(--muted)">Keine Einträge.</p>'; return; }
+  if (!rows.length) { el.innerHTML = '<p class="fg-secondary">Keine Einträge.</p>'; return; }
   const head = columns.map(c => `<th>${c.label}</th>`).join('');
   const body = rows.map(row => {
     const cells = columns.map(c => `<td>${row[c.key] ?? ''}</td>`).join('');
@@ -40,14 +50,51 @@ function renderTable(targetId, columns, rows, actions) {
 // ---- Stationen ----
 async function loadStations() {
   const rows = await api('stations');
-  renderTable('stations-table',
-    [{key:'id',label:'ID'},{key:'slug',label:'Slug'},{key:'name',label:'Name'},{key:'created_at',label:'Erstellt'}],
-    rows,
-    [{label:'Löschen', fn:'deleteStation', arg: r => r.id}]
-  );
-  // Live-Station-Dropdown befüllen
+  const el = document.getElementById('stations-table');
+  if (!rows || !rows.length) { el.innerHTML = '<p class="fg-secondary">Keine Eintr\u00e4ge.</p>'; return; }
+  el.innerHTML = `<table>
+    <thead><tr><th>ID</th><th>Slug</th><th>Name</th><th>MAC</th><th>Letzte Aktivit&#228;t</th><th>Firmware</th><th>Erstellt</th><th></th><th></th></tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td>${r.id}</td>
+      <td><code>${r.slug}</code></td>
+      <td>${r.name}</td>
+      <td class="fg-secondary" style="font-size:.82rem;font-family:monospace">${r.mac ?? '\u2013'}</td>
+      <td class="fg-secondary" style="font-size:.85rem">${fmtTs(r.last_seen)}</td>
+      <td style="font-size:.82rem">${r.fw_version ? '<code>'+r.fw_version+'</code>' : '\u2013'}</td>
+      <td class="fg-secondary" style="font-size:.85rem">${fmtTs(r.created_at)}</td>
+      <td><button class="btn-edit" onclick="editStation(${r.id},'${r.slug.replace(/'/g,"\\'")}','${r.name.replace(/'/g,"\\'")}','${(r.mac??'').replace(/'/g,"\\'")}')">Bearbeiten</button></td>
+      <td><button class="btn-del"  onclick="deleteStation(${r.id})">L\u00f6schen</button></td>
+    </tr>`).join('')}</tbody></table>`;
+  // Live-Station-Dropdown und History-Station-Dropdown bef\u00fcllen
   const sel = document.getElementById('live-station');
   sel.innerHTML = rows.map(r => `<option value="${r.slug}">${r.name}</option>`).join('');
+  const selH = document.getElementById('history-station');
+  if (selH) selH.innerHTML = sel.innerHTML;
+}
+
+function openAddStation() {
+  openEditModal('Neue Station', [
+    { label: 'Name',  name: 'name',  value: '', type: 'text' },
+    { label: 'Slug',  name: 'slug',  value: '', type: 'text', hint: 'Nur a\u2013z, 0\u20139, Bindestrich (z.\u202fB.\u00a0sws-garten)' },
+  ], async data => {
+    const res = await api('stations', 'POST', { name: data.name, slug: data.slug });
+    if (res.error) throw new Error(res.error);
+    loadStations();
+  });
+}
+
+function editStation(id, slug, name, mac = '') {
+  openEditModal('Station bearbeiten', [
+    { label: 'Name',  name: 'name',  value: name, type: 'text' },
+    { label: 'Slug',  name: 'slug',  value: slug, type: 'text', hint: 'Nur a–z, 0–9, Bindestrich' },
+    { label: 'MAC',   name: 'mac',   value: mac,  type: 'text', hint: 'Wird automatisch von der Station gesetzt', required: false },
+  ], async data => {
+    const body = { id, name: data.name, slug: data.slug };
+    if (data.mac !== undefined) body.mac = data.mac || null;
+    const res = await api('stations', 'PATCH', body);
+    if (!res.ok) throw new Error(res.error ?? 'Fehler');
+    loadStations();
+  });
 }
 
 async function deleteStation(id) {
@@ -59,6 +106,7 @@ async function deleteStation(id) {
 // ---- Metriken ----
 async function loadMetrics() {
   const rows = await api('metrics');
+  if (!rows) return;
   renderTable('metrics-table',
     [{key:'metric_key',label:'Key'},{key:'label',label:'Bezeichnung'},
      {key:'unit',label:'Einheit'},{key:'display_order',label:'Reihenfolge'},
@@ -89,10 +137,10 @@ function openAddMetric(existing = null) {
   } else {
     f.metric_key.readOnly = false;
   }
-  document.getElementById('modal').classList.remove('hidden');
+  document.getElementById('modal').style.display = '';
 }
 
-function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+function closeModal() { document.getElementById('modal').style.display = 'none'; }
 
 document.getElementById('metric-form')?.addEventListener('submit', async e => {
   e.preventDefault();
@@ -111,22 +159,48 @@ document.getElementById('metric-form')?.addEventListener('submit', async e => {
 // ---- Benutzer ----
 async function loadUsers() {
   const rows = await api('users');
-  renderTable('users-table',
-    [{key:'id',label:'ID'},{key:'email',label:'E-Mail'},{key:'created_at',label:'Erstellt'}],
-    rows,
-    [{label:'Löschen', fn:'deleteUser', arg: r => r.id}]
-  );
+  const el = document.getElementById('users-table');
+  if (!rows) { el.innerHTML = '<p class="fg-secondary">Fehler beim Laden.</p>'; return; }
+  if (!Array.isArray(rows) || !rows.length) { el.innerHTML = '<p class="fg-secondary">Keine Einträge.</p>'; return; }
+  el.innerHTML = `<table>
+    <thead><tr><th>ID</th><th>E-Mail</th><th>Rolle</th><th>Erstellt</th><th></th><th></th></tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td>${r.id}</td>
+      <td>${r.email}</td>
+      <td><span class="role-badge role-${r.role ?? 'user'}">${r.role ?? 'user'}</span></td>
+      <td class="fg-secondary" style="font-size:.85rem">${r.created_at ?? ''}</td>
+      <td><button class="btn-edit" onclick="editUser(${r.id},'${r.email.replace(/'/g,"\\'")  }','${(r.role??'user').replace(/'/g,"\\'")}')">Bearbeiten</button></td>
+      <td>${r.role !== 'admin' ? `<button class="btn-del" onclick="deleteUser(${r.id})">Löschen</button>` : ''}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+function editUser(id, email, role) {
+  openEditModal('Benutzer bearbeiten', [
+    { label: 'E-Mail',         name: 'email',    value: email, type: 'email' },
+    { label: 'Rolle',          name: 'role',     value: role,  type: 'select', options: ['user','admin'] },
+    { label: 'Neues Passwort', name: 'password', value: '',    type: 'password', hint: 'Leer lassen = nicht ändern', required: false },
+  ], async data => {
+    const body = { id };
+    if (data.email)    body.email    = data.email;
+    if (data.role)     body.role     = data.role;
+    if (data.password) body.password = data.password;
+    const res = await api('users', 'PATCH', body);
+    if (!res.ok) throw new Error(res.error ?? 'Fehler');
+    loadUsers();
+  });
 }
 
 async function deleteUser(id) {
   if (!confirm('Benutzer wirklich löschen?')) return;
-  await api(`users&id=${id}`, 'DELETE');
+  const res = await api(`users&id=${id}`, 'DELETE');
+  if (!res || res.error) { alert(res?.error ?? 'Fehler'); return; }
   loadUsers();
 }
 
 // ---- Einladungen ----
 async function loadInvites() {
   const rows = await api('invites');
+  if (!rows) return;
   renderTable('invites-table',
     [{key:'id',label:'ID'},{key:'code',label:'Code'},
      {key:'created_at',label:'Erstellt'},{key:'used_at',label:'Verwendet'}],
@@ -137,6 +211,7 @@ async function loadInvites() {
 
 async function createInvite() {
   const res = await api('invites', 'POST');
+  if (!res) return;
   alert(`Neuer Code: ${res.code}`);
   loadInvites();
 }
@@ -150,21 +225,254 @@ async function deleteInvite(id) {
 // ---- Live-Daten ----
 let liveTimer = null;
 
+// Metriken die als Gauge dargestellt werden (key → {min, max})
+// Metro gauge: data-value ist der absolute Wert zwischen data-min und data-max
+const GAUGE_METRICS = {
+  // Temperatur: -30°C blau → 18-24°C grün (angenehm) → 28°C gelb → 60°C rot
+  temperature:         { min: -30, max: 60,  colorClass: 'gauge-temp' },
+  pool_temperature:    { min: -10, max: 50,  colorClass: 'gauge-pool' },
+  heat_index:          { min: -30, max: 60,  colorClass: 'gauge-temp' },
+  dewpoint:            { min: -10, max: 30,  colorClass: 'gauge-dew'  },
+  // Luftfeuchte: <30% blau (trocken) → 40-60% grün → >70% rot (feucht)
+  humidity:            { min: 0,   max: 100, colorClass: 'gauge-hum'  },
+  // Batterie: 0% rot → 50% gelb → 100% grün
+  battery_pct:         { min: 0,   max: 100, colorClass: 'gauge-bat'  },
+};
+
+function renderGauge(value, min, max, unit, label, colorClass) {
+  // Wert auf 1 Nachkommastelle runden (Metro zeigt den Rohwert an)
+  const rounded = Math.round(value * 10) / 10;
+  const clamped = Math.max(min, Math.min(max, rounded));
+  const suffix   = unit ? ` ${unit}` : '';
+  const cls = colorClass || '';
+  return `<div class="sws-gauge-box ${cls}">
+    <div data-role="gauge"
+         data-value="${clamped}"
+         data-min="${min}"
+         data-max="${max}"
+         data-label-min="${min}"
+         data-label-max="${max}"
+         data-suffix="${suffix}"
+         data-label="${label}"
+         data-values="5"
+         data-segments="10"
+         data-size="200"></div>
+  </div>`;
+}
+
 async function loadLive() {
   const slug = document.getElementById('live-station').value;
   const d = await api(`live&station=${encodeURIComponent(slug)}`);
   const grid = document.getElementById('live-data');
-  if (d.error) { grid.innerHTML = `<p style="color:var(--muted)">${d.error}</p>`; return; }
-  grid.innerHTML = d.values.map(v =>
-    `<div class="live-card">
-      <div class="val">${parseFloat(v.value).toLocaleString('de-DE', {maximumFractionDigits:2})}</div>
-      <div class="unit">${v.unit ?? ''}</div>
-      <div class="lbl">${v.label ?? v.metric_key}</div>
-    </div>`
-  ).join('');
+  if (!d || d.error) { grid.innerHTML = `<p class="fg-secondary">${d?.error ?? 'Fehler beim Laden'}</p>`; return; }
+  if (d.error) { grid.innerHTML = `<p class="fg-secondary">${d.error}</p>`; return; }
+
+  const ts = d.created_at
+    ? (() => {
+        // Server liefert UTC ohne Timezone-Kennzeichnung – als UTC parsen
+        const utc = d.created_at.replace(' ', 'T') + 'Z';
+        const dt  = new Date(utc);
+        const fmt = dt.toLocaleString('de-DE', {
+          timeZone:    'Europe/Berlin',
+          day:         '2-digit',
+          month:       '2-digit',
+          year:        'numeric',
+          hour:        '2-digit',
+          minute:      '2-digit',
+          second:      '2-digit',
+        });
+        return `<p class="sws-live-ts"><span class="mif-clock"></span> Letzte Messung: ${fmt} Uhr</p>`;
+      })()
+    : '';
+
+  const gauges = [];
+  const cards  = [];
+
+  d.values.forEach(v => {
+    const key    = v.metric_key;
+    const num    = parseFloat(v.value);
+    const isNum  = !isNaN(num) && String(v.value).trim() !== '';
+    const gaugeCfg = GAUGE_METRICS[key];
+    const label  = (v.label ?? key).trim();
+    const unit   = (v.unit ?? '').trim();
+
+    if (isNum && gaugeCfg) {
+      gauges.push(renderGauge(num, gaugeCfg.min, gaugeCfg.max, unit, label, gaugeCfg.colorClass));
+    } else {
+      const display = isNum
+        ? num.toLocaleString('de-DE', { maximumFractionDigits: 1 })
+        : (v.value ?? '\u2013');
+      cards.push(`<div class="sws-live-box">
+        <div class="val${isNum ? '' : ' text'}">${display}</div>
+        <div class="unit">${unit}</div>
+        <div class="lbl">${label}</div>
+      </div>`);
+    }
+  });
+
+  const gaugeRow = gauges.length
+    ? `<div class="sws-live-grid" style="margin-bottom:18px">${gauges.join('')}</div>`
+    : '';
+  const cardRow  = cards.length
+    ? `<div class="sws-live-grid">${cards.join('')}</div>`
+    : '';
+
+  grid.innerHTML = ts + gaugeRow + cardRow;
+
+  // Metro-Gauges initialisieren (kurz warten bis DOM gerendert ist)
+  if (gauges.length && window.Metro) {
+    setTimeout(() => {
+      grid.querySelectorAll('[data-role="gauge"]').forEach(el => {
+        if (!el.dataset.metroComponent) Metro.makePlugin(el, 'gauge');
+      });
+    }, 50);
+  }
 }
 
 document.getElementById('live-station')?.addEventListener('change', loadLive);
+
+// ---- Historie ----
+const historyCharts = {};   // metric_key → Chart-Instanz
+
+const HISTORY_COLORS = {
+  temperature:      '#e15759',
+  pool_temperature: '#4e79a7',
+  humidity:         '#59a14f',
+  rel_pressure:     '#9c755f',
+  battery_pct:      '#f28e2b',
+};
+
+function tsToLocal(utcStr) {
+  // Server liefert UTC ohne Timezone-Kennzeichnung
+  return new Date(utcStr.replace(' ', 'T') + 'Z');
+}
+
+// UTC-Timestamp als deutschen Datetime-String (Europe/Berlin, Sommer/Winterzeit automatisch)
+function fmtTs(ts) {
+  if (!ts) return '–';
+  return tsToLocal(ts).toLocaleString('de-DE', {
+    timeZone: 'Europe/Berlin',
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+}
+
+async function loadHistory() {
+  const slug  = document.getElementById('history-station').value;
+  const hours = document.getElementById('history-hours').value;
+  const grid  = document.getElementById('history-charts');
+  if (!slug) return;
+
+  grid.innerHTML = '<p class="fg-secondary">Lade…</p>';
+
+  const d = await api(`history&station=${encodeURIComponent(slug)}&hours=${hours}`);
+  if (!d || d.error) { grid.innerHTML = `<p class="fg-secondary">${d?.error ?? 'Fehler beim Laden'}</p>`; return; }
+  if (!d.series?.length) { grid.innerHTML = '<p class="fg-secondary">Keine Daten im gew\u00e4hlten Zeitraum.</p>'; return; }
+
+  // Alte Charts zerstören
+  Object.values(historyCharts).forEach(c => c.destroy());
+  Object.keys(historyCharts).forEach(k => delete historyCharts[k]);
+
+  grid.innerHTML = d.series.map(s =>
+    `<div class="sws-history-card">
+       <div class="sws-history-title">${s.label}${s.unit ? ' (' + s.unit + ')' : ''}</div>
+       <canvas id="hc-${s.label.replace(/\W/g,'_')}"></canvas>
+     </div>`
+  ).join('');
+
+  d.series.forEach(s => {
+    const canvasId = `hc-${s.label.replace(/\W/g,'_')}`;
+    const ctx = document.getElementById(canvasId)?.getContext('2d');
+    if (!ctx) return;
+
+    const key   = d.series.indexOf(s); // Fallback-Index für Farbe
+    const color = Object.values(HISTORY_COLORS)[key] ?? '#76b7b2';
+
+    historyCharts[canvasId] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        datasets: [{
+          label:            s.label,
+          data:             s.points.map(p => ({ x: tsToLocal(p.t), y: p.v })),
+          borderColor:      color,
+          backgroundColor:  color + '22',
+          borderWidth:      2,
+          pointRadius:      s.points.length > 200 ? 0 : 2,
+          fill:             true,
+          tension:          0.3,
+        }],
+      },
+      options: {
+        animation:   false,
+        responsive:  true,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => `${ctx.parsed.y.toLocaleString('de-DE', { maximumFractionDigits: 1 })} ${s.unit}`,
+              title: ctx => {
+                const d = ctx[0].parsed.x;
+                return new Date(d).toLocaleString('de-DE', { timeZone: 'Europe/Berlin', day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+              },
+            },
+          },
+        },
+        scales: {
+          x: {
+            type:   'time',
+            time:   {
+              displayFormats: {
+                hour:  'dd.MM HH:mm',
+                day:   'dd.MM',
+              },
+            },
+            ticks:  { color: '#888', maxTicksLimit: 8 },
+            grid:   { color: '#2a2a2a' },
+          },
+          y: {
+            ticks: { color: '#888', callback: v => v.toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' ' + s.unit },
+                      grid:  { color: '#2a2a2a' },
+                      },
+                    },
+                  },
+                });
+              });
+
+                // ---- Rohdaten-Tabelle (alle Metriken) ----
+                const raw = await api(`rawdata&station=${encodeURIComponent(slug)}&hours=${hours}`);
+                if (!raw || raw.error) {
+                  grid.insertAdjacentHTML('beforeend', `<p class="fg-secondary">${raw?.error ?? 'Rohdaten konnten nicht geladen werden'}</p>`);
+                  return;
+                }
+
+                const colKeys = raw.keys;
+                const tableHtml = `
+                  <div class="sws-history-raw">
+                    <div class="sws-history-raw-title">Rohdaten &mdash; alle Messwerte (${raw.rows.length} Eintr\u00e4ge)</div>
+                    <div class="sws-raw-scroll">
+                      <table class="sws-raw-table">
+                        <thead><tr>
+                          <th>Zeitpunkt</th>
+                          ${colKeys.map(k => '<th>' + k + '</th>').join('')}
+                        </tr></thead>
+                        <tbody>
+                          ${raw.rows.map(row =>
+                            '<tr><td class="sws-raw-ts">' +
+                            new Date(row.ts + 'Z').toLocaleString('de-DE', { timeZone: 'Europe/Berlin', day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit' }) +
+                            '</td>' +
+                            colKeys.map(k => '<td>' + (row[k] !== undefined ? row[k] : '\u2013') + '</td>').join('') +
+                            '</tr>'
+                          ).join('')}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>`;
+
+                grid.insertAdjacentHTML('beforeend', tableHtml);
+              }
+
+document.getElementById('history-station')?.addEventListener('change', loadHistory);
+document.getElementById('history-hours')?.addEventListener('change', loadHistory);
 
 // ---- Loader-Map ----
 const loaders = {
@@ -173,8 +481,10 @@ const loaders = {
   users:       loadUsers,
   invites:     loadInvites,
   live:        () => { loadStations().then(loadLive); clearInterval(liveTimer); liveTimer = setInterval(loadLive, 30_000); },
+  history:     () => loadStations().then(loadHistory),
   credentials: () => {},   // kein Vorladen nötig
   errorlog:    loadErrorLog,
+  ota:         loadOta,
 };
 
 // ---- Credentials-Formular ----
@@ -187,7 +497,7 @@ document.getElementById('cred-form')?.addEventListener('submit', async e => {
   const ap  = f.admin_pass.value;
   const ap2 = f.admin_pass_confirm.value;
   if (ap && ap !== ap2) {
-    msg.innerHTML = '<div class="msg-err">Admin-Passwörter stimmen nicht überein.</div>';
+    msg.innerHTML = '<div class="sws-msg-err">Admin-Passwörter stimmen nicht überein.</div>';
     return;
   }
 
@@ -207,10 +517,10 @@ document.getElementById('cred-form')?.addEventListener('submit', async e => {
 
   if (res.success) {
     const changed = (res.rotated ?? []).join(', ');
-    msg.innerHTML = `<div class="msg-ok">✅ Gespeichert: ${changed} – ${res.rotated_at}</div>`;
+    msg.innerHTML = `<div class="sws-msg-ok">✅ Gespeichert: ${changed} – ${res.rotated_at}</div>`;
     f.reset();
   } else {
-    msg.innerHTML = `<div class="msg-err">❌ ${res.error ?? 'Unbekannter Fehler'}</div>`;
+    msg.innerHTML = `<div class="sws-msg-err">❌ ${res.error ?? 'Unbekannter Fehler'}</div>`;
   }
 });
 
@@ -227,19 +537,19 @@ async function loadErrorLog() {
   const rows = Array.isArray(data) ? data : (data.rows ?? []);
 
   const el = document.getElementById('errorlog-table');
-  if (!rows.length) { el.innerHTML = '<p style="color:var(--muted)">Keine Einträge.</p>'; return; }
+  if (!rows.length) { el.innerHTML = '<p class="fg-secondary">Keine Einträge.</p>'; return; }
 
   const badgeClass = lvl => ({ error:'badge-error', warning:'badge-warning', info:'badge-info' }[lvl] ?? '');
   el.innerHTML = `<table><thead><tr>
     <th>Zeit</th><th>Station</th><th>Level</th><th>Code</th><th>Nachricht</th><th>Kontext</th>
   </tr></thead><tbody>` +
   rows.map(r => `<tr>
-    <td style="white-space:nowrap;font-size:.8rem">${r.created_at ?? ''}</td>
+    <td class="fg-secondary" style="white-space:nowrap;font-size:.8rem">${r.created_at ?? ''}</td>
     <td>${r.station_slug ?? r.station_id ?? ''}</td>
     <td><span class="badge ${badgeClass(r.level)}">${r.level}</span></td>
     <td style="font-family:monospace;font-size:.82rem">${r.code}</td>
     <td>${r.message}</td>
-    <td style="font-size:.78rem;color:var(--muted)">${r.context ? JSON.stringify(r.context) : ''}</td>
+    <td class="fg-secondary" style="font-size:.78rem">${r.context ? JSON.stringify(r.context) : ''}</td>
   </tr>`).join('') + '</tbody></table>';
 }
 
@@ -255,6 +565,138 @@ async function populateErrStations() {
     sel.appendChild(o);
   });
 }
+
+// ---- OTA-Verwaltung ----
+async function loadOta() {
+  const sketches = await api('ota');
+  const sel      = document.getElementById('ota-sketch-select');
+  const cards    = document.getElementById('ota-cards');
+
+  if (!Array.isArray(sketches) || !sketches.length) {
+    cards.innerHTML = '<p class="fg-secondary">Keine Firmware-Ordner gefunden.<br>Ordner unter <code>api/ota/firmware/{sketch-id}/</code> anlegen.</p>';
+    sel.innerHTML   = '<option value="">Keine Sketches gefunden</option>';
+    return;
+  }
+
+  // Karten rendern
+  cards.innerHTML = sketches.map(s => {
+    const mtime = s.firmware_mtime
+      ? new Date(s.firmware_mtime * 1000).toLocaleString('de-DE', { timeZone: 'Europe/Berlin', day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })
+      : null;
+    const size  = s.firmware_size ? (s.firmware_size / 1024).toFixed(1) + '\u202fKB' : null;
+    const hasFw = size !== null;
+    return `
+    <div class="sws-ota-card">
+      <h4><span class="mif-embed2"></span> ${s.sketch}</h4>
+      <div class="sws-ota-version">${s.version ?? '–'}</div>
+      ${hasFw
+        ? `<div class="sws-ota-meta">${size}&nbsp;·&nbsp;${mtime}</div>
+           <div class="sws-ota-path">ota/firmware/${s.sketch}/firmware.bin</div>`
+        : `<div class="sws-ota-warn">&#x26A0; Noch keine Firmware hochgeladen</div>`}
+    </div>`;
+  }).join('');
+
+  // Dropdown befüllen
+  sel.innerHTML = sketches.map(s =>
+    `<option value="${s.sketch}">${s.sketch}</option>`
+  ).join('');
+}
+
+async function otaUpload(e) {
+  e.preventDefault();
+  const form = e.target;
+  const msg  = document.getElementById('ota-upload-msg');
+  const btn  = document.getElementById('ota-submit-btn');
+
+  const sketch  = form.elements.sketch.value;
+  const version = form.elements.version.value.trim();
+  const file    = form.elements.firmware.files[0];
+
+  btn.disabled  = true;
+  msg.textContent = 'Wird hochgeladen…';
+
+  // 1. Firmware hochladen
+  const fd = new FormData();
+  fd.append('sketch',   sketch);
+  fd.append('firmware', file);
+  const uploadRes = await fetch('?action=api/ota/upload', {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': CSRF_TOKEN },
+    body: fd,
+  }).then(r => r.json());
+  if (!uploadRes.ok) {
+    msg.textContent = `❌ Upload fehlgeschlagen: ${uploadRes.error}`;
+    btn.disabled = false;
+    return;
+  }
+
+  // 2. Version setzen
+  const verRes = await api('ota/version', 'POST', { sketch, version });
+  if (!verRes.ok) {
+    msg.textContent = `⚠️ Firmware hochgeladen, Version konnte nicht gesetzt werden: ${verRes.error}`;
+    btn.disabled = false;
+    loadOta();
+    return;
+  }
+
+  msg.textContent = `✅ ${sketch} v${verRes.version} bereitgestellt (${(uploadRes.size / 1024).toFixed(1)} KB).`;
+  btn.disabled = false;
+  form.elements.firmware.value = '';
+  loadOta();
+}
+
+// ---- Generisches Edit-Modal ----
+function openEditModal(title, fields, onSave) {
+  const modal   = document.getElementById('edit-modal');
+  const titleEl = document.getElementById('edit-modal-title');
+  const form    = document.getElementById('edit-modal-form');
+  const msgEl   = document.getElementById('edit-modal-msg');
+
+  titleEl.textContent = title;
+  msgEl.textContent   = '';
+  form.innerHTML = fields.map(f => {
+    const req = f.required === false ? '' : 'required';
+    if (f.type === 'select') {
+      const opts = f.options.map(o => `<option value="${o}"${o === f.value ? ' selected' : ''}>${o}</option>`).join('');
+      return `<div class="form-group mt-2"><label>${f.label}</label><select name="${f.name}" class="select" ${req}>${opts}</select>${f.hint ? `<span class="remark">${f.hint}</span>` : ''}</div>`;
+    }
+    return `<div class="form-group mt-2"><label>${f.label}</label>
+      <input type="${f.type ?? 'text'}" name="${f.name}" class="metro-input" value="${f.value ?? ''}" ${req}>
+      ${f.hint ? `<span class="remark">${f.hint}</span>` : ''}
+    </div>`;
+  }).join('');
+
+  modal.style.display = '';
+
+  form.onsubmit = async e => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(form));
+    try {
+      await onSave(data);
+      modal.style.display = 'none';
+    } catch (err) {
+      msgEl.textContent = err.message;
+    }
+  };
+}
+
+document.getElementById('edit-modal-close')?.addEventListener('click',
+  () => { document.getElementById('edit-modal').style.display = 'none'; });
+
+// Migrations-Button Handler
+document.getElementById('btn-migrate')?.addEventListener('click', async () => {
+  const email = prompt('Admin E-Mail (z.B. admin@example.com):');
+  if (!email) return;
+  const pass  = prompt('Admin Passwort (mind. 8 Zeichen):');
+  if (!pass) return;
+  const res = await fetch('?action=api/migrate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
+    body: JSON.stringify({ email, password: pass }),
+  }).then(r => r.json());
+  alert(res.ok ? '✅ Migration OK:\n' + res.log.join('\n') : '❌ Fehler: ' + res.error);
+  if (res.ok) loadUsers();
+});
 
 // Start
 showSection('stations');

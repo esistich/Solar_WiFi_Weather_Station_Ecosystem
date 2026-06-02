@@ -226,6 +226,7 @@ function calculateAndStoreZambretti(PDO $db, int $stationId, int $measId, int $t
 
 // ── Direkter GET-Endpunkt: GET /v1/zambretti?station=<slug> ──────────────────
 if (basename(__FILE__) === basename($_SERVER['SCRIPT_FILENAME'] ?? '')) {
+	require_once __DIR__ . '/../config/config.php';
 	require_once __DIR__ . '/../config/db.php';
 	require_once __DIR__ . '/../config/auth.php';
 	require_once __DIR__ . '/helpers.php';

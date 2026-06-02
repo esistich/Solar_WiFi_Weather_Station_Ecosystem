@@ -1,6 +1,9 @@
 # Upload-Paket (lokal generiert, nicht committen)
 upload/
 
+# Deployment-Secrets
+.env
+
 # Visual Studio
 .vs/
 # Arduino Build-Ordner
@@ -8,14 +11,18 @@ build/
 *.bin
 *.elf
 *.map
+# OTA-Firmware-Uploads (werden nur auf dem Server abgelegt, nicht im Repo)
+api/ota/firmware/**/*.bin
 # Secrets – niemals committen
 jwt_secret.php
 *firebase*adminsdk*.json
 google-services.json
 upload_package.zip
-# API-Konfigurationsdateien mit echten Credentials (nur .example-Vorlagen committen)
-api/config/db.php
+# API-Konfigurationsdatei mit echten Credentials (wie wp-config.php – nie committen)
+api/config/config.php
+# Legacy – durch config.php ersetzt (sicherheitshalber weiter ausschließen)
 api/config/credentials.php
+api/config/db.php
 api/lib/auth.php
 api/lib/db.php
 # Firebase Service-Account-Schlüssel

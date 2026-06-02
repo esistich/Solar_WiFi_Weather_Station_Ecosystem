@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../services/services.dart';
 import '../widgets/widgets.dart';
+import 'settings_screen.dart';
 
 /// Detail-Ansicht eines Geräts: aktuelle Werte + History-Chart.
 class DetailScreen extends StatefulWidget {
@@ -20,10 +21,12 @@ class _DetailScreenState extends State<DetailScreen> {
   String? _historyError;
   int _selectedHours = 24;
   late final ApiService _api;
+  late Device _device; // lokal aktualisierbar nach Rename
 
   @override
   void initState() {
 	super.initState();
+	_device = widget.device;
 	_api = ApiService();
 	_loadHistory();
   }
@@ -34,15 +37,109 @@ class _DetailScreenState extends State<DetailScreen> {
 	super.dispose();
   }
 
+  /// Zeigt Dialog zum Aendern von Stationsname und Slug.
+  Future<void> _showRenameDialog() async {
+    final nameCtrl = TextEditingController(text: _device.name);
+    final slugCtrl = TextEditingController(text: _device.stationSlug);
+    String? dialogError;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Station umbenennen'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Name'),
+              const SizedBox(height: 4),
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(hintText: 'z.B. Waggum'),
+              ),
+              const SizedBox(height: 12),
+              const Text('Slug (API-Bezeichner)'),
+              const SizedBox(height: 4),
+              TextField(
+                controller: slugCtrl,
+                decoration: const InputDecoration(hintText: 'z.B. waggum'),
+              ),
+              if (dialogError != null) ...[
+                const SizedBox(height: 8),
+                Text(dialogError!, style: const TextStyle(color: Colors.red)),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Abbrechen'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final auth = context.read<AuthService>();
+                final token = auth.currentUser?.token;
+                if (token == null) {
+                  setDialogState(() => dialogError = 'Nicht eingeloggt.');
+                  return;
+                }
+                final newName = nameCtrl.text.trim();
+                final newSlug = slugCtrl.text.trim().toLowerCase();
+                if (newName.isEmpty || newSlug.isEmpty) {
+                  setDialogState(() => dialogError = 'Name und Slug duerfen nicht leer sein.');
+                  return;
+                }
+                try {
+                  await _api.updateStation(
+                    _device,
+                    currentSlug: _device.stationSlug,
+                    name: newName,
+                    newSlug: newSlug,
+                    bearerToken: token,
+                  );
+                  // Lokales Device und gespeichertes Device aktualisieren
+                  final updated = _device.copyWith(
+                    name: newName,
+                    stationSlug: newSlug,
+                  );
+                  if (!mounted) return;
+                  await context.read<DeviceProvider>().updateDevice(updated);
+                  setState(() => _device = updated);
+                  if (!mounted) return;
+                  Navigator.pop(ctx);
+                } catch (e) {
+                  setDialogState(() => dialogError = e.toString());
+                }
+              },
+              child: const Text('Speichern'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _loadHistory() async {
 	setState(() {
 	  _loadingHistory = true;
 	  _historyError = null;
 	});
 	try {
+	  final auth = context.read<AuthService>();
+	  // Verlauf erfordert JWT – nicht eingeloggt → Hinweis statt 401
+	  if (!auth.isLoggedIn) {
+		setState(() {
+		  _loadingHistory = false;
+		  _historyError = null;
+		  _history = [];
+		});
+		return;
+	  }
 	  final data = await _api.fetchHistory(
-		widget.device,
+		_device,
 		hours: _selectedHours,
+		bearerToken: auth.currentUser?.token,
 	  );
 	  setState(() => _history = data);
 	} catch (e) {
@@ -55,49 +152,92 @@ class _DetailScreenState extends State<DetailScreen> {
   @override
   Widget build(BuildContext context) {
 	final provider = context.watch<DeviceProvider>();
-	final measurement = provider.measurementFor(widget.device.id);
-	final loading = provider.isLoading(widget.device.id);
+	final measurement = provider.measurementFor(_device.id);
+	final loading = provider.isLoading(_device.id);
 
 	return Scaffold(
-	  appBar: AppBar(
-		title: Text(widget.device.name),
-		actions: [
-		  IconButton(
-			icon: const Icon(Icons.refresh),
-			onPressed: () {
-			  provider.refreshDevice(widget.device.id);
-			  _loadHistory();
-			},
-		  ),
-		],
-	  ),
 	  body: RefreshIndicator(
 		onRefresh: () async {
-		  provider.refreshDevice(widget.device.id);
+		  provider.refreshDevice(_device.id);
 		  await _loadHistory();
 		},
-		child: ListView(
-		  padding: const EdgeInsets.all(16),
-		  children: [
-			// Aktuelle Werte
-			_CurrentValues(
-			  measurement: measurement,
-			  loading: loading,
-			  error: provider.errorFor(widget.device.id),
+		child: CustomScrollView(
+		  slivers: [
+			// ── Gradient SliverAppBar ──────────────────────────────────────
+			SliverAppBar(
+			  expandedHeight: 160,
+			  pinned: true,
+			  flexibleSpace: FlexibleSpaceBar(
+				titlePadding: const EdgeInsets.fromLTRB(16, 0, 48, 12),
+				title: Text(
+				  _device.name,
+				  style: const TextStyle(
+					color: Colors.white,
+					fontSize: 18,
+					fontWeight: FontWeight.bold,
+					shadows: [Shadow(blurRadius: 4, color: Colors.black38)],
+				  ),
+				),
+				background: Container(
+				  decoration: BoxDecoration(
+					gradient: WeatherUtils.gradientForZambretti(
+					  measurement?.zambretti ?? '',
+					),
+				  ),
+				  child: Align(
+					alignment: Alignment.centerRight,
+					child: Padding(
+					  padding: const EdgeInsets.only(right: 20, bottom: 20),
+					  child: Icon(
+						WeatherUtils.iconForZambretti(
+						  measurement?.zambretti ?? '',
+						),
+						color: Colors.white30,
+						size: 80,
+					  ),
+					),
+				  ),
+				),
+			  ),
+			  actions: [
+				IconButton(
+				  icon: const Icon(Icons.edit_outlined, color: Colors.white),
+				  tooltip: 'Station umbenennen',
+				  onPressed: _showRenameDialog,
+				),
+				IconButton(
+				  icon: const Icon(Icons.refresh, color: Colors.white),
+				  onPressed: () {
+					provider.refreshDevice(_device.id);
+					_loadHistory();
+				  },
+				),
+			  ],
 			),
-			const SizedBox(height: 24),
+			// ── Inhalt als Sliver ──────────────────────────────────────────
+			SliverPadding(
+			  padding: const EdgeInsets.all(16),
+			  sliver: SliverList(
+				delegate: SliverChildListDelegate([
+				  // Aktuelle Werte
+				  _CurrentValues(
+					measurement: measurement,
+					loading: loading,
+					error: provider.errorFor(_device.id),
+				  ),
+				  const SizedBox(height: 24),
 
-			// Zeitraum-Auswahl
-			_PeriodSelector(
-			  selected: _selectedHours,
-			  onChanged: (h) {
-				setState(() => _selectedHours = h);
-				_loadHistory();
-			  },
-			),
-			const SizedBox(height: 16),
+				  // Zeitraum-Auswahl
+				  _PeriodSelector(
+					selected: _selectedHours,
+					onChanged: (h) {
+					  setState(() => _selectedHours = h);
+					  _loadHistory();
+					},
+				  ),
+				  const SizedBox(height: 16),
 
-			// Charts
+				  // Charts
 			if (_loadingHistory)
 			  const SizedBox(
 				height: 100,
@@ -109,6 +249,21 @@ class _DetailScreenState extends State<DetailScreen> {
 				child: Text(
 				  _historyError!,
 				  style: const TextStyle(color: Colors.red),
+				),
+			  )
+			else if (_history.isEmpty)
+			  Padding(
+				padding: const EdgeInsets.symmetric(vertical: 24),
+				child: _LoginHint(
+				  onLogin: () async {
+					await Navigator.push<void>(
+					  context,
+					  MaterialPageRoute(
+						builder: (_) => const SettingsScreen(),
+					  ),
+					);
+					_loadHistory();
+				  },
 				),
 			  )
 			else ...[
@@ -175,16 +330,19 @@ class _DetailScreenState extends State<DetailScreen> {
 				  ),
 				],
 
-			const SizedBox(height: 24),
+							const SizedBox(height: 24),
 
-			// API-Endpunkt Info
-			_DeviceInfo(device: widget.device),
-		  ],
-		),
-	  ),
-	);
-  }
-}
+							  // API-Endpunkt Info
+							  _DeviceInfo(device: _device),
+							]),
+						  ),
+						),
+					  ],
+					),
+				  ),
+				);
+			  }
+			}
 
 class _CurrentValues extends StatelessWidget {
   final Measurement? measurement;
@@ -358,6 +516,49 @@ class _DeviceInfo extends StatelessWidget {
 		subtitle: Text(
 		  device.apiUrl,
 		  style: const TextStyle(fontSize: 11),
+		),
+	  ),
+	);
+  }
+}
+
+class _LoginHint extends StatelessWidget {
+  final VoidCallback onLogin;
+  const _LoginHint({required this.onLogin});
+
+  @override
+  Widget build(BuildContext context) {
+	return Card(
+	  child: Padding(
+		padding: const EdgeInsets.all(16),
+		child: Row(
+		  children: [
+			const Icon(Icons.lock_outline, color: Colors.grey),
+			const SizedBox(width: 12),
+			Expanded(
+			  child: Column(
+				crossAxisAlignment: CrossAxisAlignment.start,
+				children: [
+				  Text(
+					'Verlauf erfordert Anmeldung',
+					style: Theme.of(context).textTheme.bodyMedium,
+				  ),
+				  const SizedBox(height: 4),
+				  Text(
+					'Bitte melde dich in den Einstellungen an.',
+					style: Theme.of(context)
+						.textTheme
+						.bodySmall
+						?.copyWith(color: Colors.grey),
+				  ),
+				],
+			  ),
+			),
+			TextButton(
+			  onPressed: onLogin,
+			  child: const Text('Anmelden'),
+			),
+		  ],
 		),
 	  ),
 	);
