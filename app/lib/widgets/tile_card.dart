@@ -1,21 +1,25 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../models/models.dart';
 import '../services/device_provider.dart';
 import 'weather_utils.dart';
 
-/// Visuell aufgewertete Kachel fuer die Startseite.
+/// Eine modernisierte, animierte Kachel für das Dashboard.
 class TileCard extends StatelessWidget {
   final Device device;
   final VoidCallback onTap;
   final VoidCallback onRefresh;
+  final bool isSelected;
 
   const TileCard({
     super.key,
     required this.device,
     required this.onTap,
     required this.onRefresh,
+    this.isSelected = false,
   });
 
   @override
@@ -31,14 +35,35 @@ class TileCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      elevation: 4,
-      clipBehavior: Clip.hardEdge,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      elevation: isSelected ? 8 : 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: isSelected 
+          ? BorderSide(color: Colors.white.withOpacity(0.5), width: 2)
+          : BorderSide.none,
+      ),
+      // Nutze Ink im Container für den Gradient-Effekt
       child: InkWell(
-        onTap: onTap,
-        child: Container(
-          decoration: BoxDecoration(gradient: gradient),
-          padding: const EdgeInsets.all(16),
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
+        borderRadius: BorderRadius.circular(24),
+        child: AnimatedContainer(
+          duration: 600.ms,
+          curve: Curves.easeOutCubic,
+          decoration: BoxDecoration(
+            gradient: gradient,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -49,25 +74,23 @@ class TileCard extends StatelessWidget {
                 measurement: measurement,
                 onRefresh: onRefresh,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               if (error != null)
                 _ErrorRow(error: error)
               else if (measurement != null)
                 _DataSection(measurement: measurement, sparkline: sparkline)
               else if (!loading)
                 const Text(
-                  'Keine Daten',
+                  'Keine Daten verfügbar',
                   style: TextStyle(color: Colors.white70),
                 ),
             ],
           ),
         ),
       ),
-    );
+    ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.1, end: 0);
   }
 }
-
-// ── Header ──────────────────────────────────────────────────────────────────
 
 class _CardHeader extends StatelessWidget {
   final Device device;
@@ -95,13 +118,15 @@ class _CardHeader extends StatelessWidget {
 
     return Row(
       children: [
-        // Geraete-Avatar
-        CircleAvatar(
-          backgroundColor: Colors.white24,
-          radius: 20,
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.2),
+            shape: BoxShape.circle,
+          ),
           child: Icon(deviceIcon, color: Colors.white, size: 22),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -110,47 +135,66 @@ class _CardHeader extends StatelessWidget {
                 device.name,
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 16,
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
+                  letterSpacing: -0.5,
                 ),
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              if (relTime != null)
-                Text(
-                  relTime,
-                  style: const TextStyle(color: Colors.white60, fontSize: 12),
+              Text(
+                [
+                  if (relTime != null) relTime,
+                  if (zambretti.isNotEmpty) zambretti,
+                ].join(' • '),
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.7),
+                  fontSize: 12,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ],
           ),
         ),
-        // Wetter-Icon
-        Icon(weatherIcon, color: Colors.white70, size: 28),
-        const SizedBox(width: 4),
-        // Status / Refresh
-        if (loading)
-          const SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: Colors.white70,
-            ),
-          )
-        else
-          InkWell(
-            onTap: onRefresh,
-            borderRadius: BorderRadius.circular(16),
-            child: const Padding(
-              padding: EdgeInsets.all(4),
-              child: Icon(Icons.refresh, color: Colors.white70, size: 20),
-            ),
-          ),
+        Icon(weatherIcon, color: WeatherUtils.colorForIcon(weatherIcon), size: 32)
+            .animate(onPlay: (c) => c.repeat())
+            .shimmer(delay: 2.seconds, duration: 1.5.seconds),
+        const SizedBox(width: 8),
+        _RefreshButton(loading: loading, onRefresh: onRefresh),
       ],
     );
   }
 }
 
-// ── Daten-Bereich ────────────────────────────────────────────────────────────
+class _RefreshButton extends StatelessWidget {
+  final bool loading;
+  final VoidCallback onRefresh;
+
+  const _RefreshButton({required this.loading, required this.onRefresh});
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const SizedBox(
+        width: 24,
+        height: 24,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: Colors.white,
+        ),
+      );
+    }
+    return IconButton(
+      visualDensity: VisualDensity.compact,
+      icon: const Icon(Icons.refresh, color: Colors.white70, size: 20),
+      onPressed: () {
+        HapticFeedback.mediumImpact();
+        onRefresh();
+      },
+    );
+  }
+}
 
 class _DataSection extends StatelessWidget {
   final Measurement measurement;
@@ -160,180 +204,194 @@ class _DataSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final battery = measurement.batteryPct;
-
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        // Grosse Temperaturanzeige
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '${measurement.temperature.toStringAsFixed(1)} °C',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 42,
-                fontWeight: FontWeight.w300,
-                height: 1.1,
-              ),
-            ),
-            if (measurement.poolTemperature != null) ...[
-              const SizedBox(height: 2),
-              Row(
-                children: [
-                  const Icon(Icons.pool, color: Colors.white60, size: 14),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${measurement.poolTemperature!.toStringAsFixed(1)} °C',
-                    style: const TextStyle(color: Colors.white70, fontSize: 14),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  measurement.temperature.toStringAsFixed(1),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 48,
+                    fontWeight: FontWeight.w200,
+                    height: 1,
                   ),
-                ],
+                ),
+                const Padding(
+                  padding: EdgeInsets.only(top: 4, left: 2),
+                  child: Text(
+                    '°C',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (measurement.poolTemperature != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  children: [
+                    const Icon(Icons.pool, color: Colors.white70, size: 14),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${measurement.poolTemperature!.toStringAsFixed(1)} °C Pool',
+                      style: const TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
+                  ],
+                ),
               ),
-            ],
-            const SizedBox(height: 8),
-            // Akku-Balken
-            _BatteryBar(pct: battery),
+            const SizedBox(height: 12),
+            _BatteryIndicator(pct: measurement.batteryPct),
           ],
         ),
         const Spacer(),
-        // Mini-Sparkline
-        if (sparkline.length > 3)
-          _Sparkline(points: sparkline)
+        if (sparkline.length > 5)
+          _MiniChart(points: sparkline)
         else
-          // Zusaetzliche Feuchte/Druck-Infos wenn keine Sparkline
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              if (measurement.humidity > 0)
-                _InfoChip(
-                  icon: Icons.water_drop_outlined,
-                  value: '${measurement.humidity.toStringAsFixed(0)} %',
-                ),
-              if (measurement.relPressure > 0)
-                _InfoChip(
-                  icon: Icons.compress,
-                  value: '${measurement.relPressure.toStringAsFixed(0)} hPa',
-                ),
-            ],
-          ),
+          _SecondaryInfo(measurement: measurement),
       ],
     );
   }
 }
 
-// ── Akku-Balken ──────────────────────────────────────────────────────────────
-
-class _BatteryBar extends StatelessWidget {
+class _BatteryIndicator extends StatelessWidget {
   final int pct;
-  const _BatteryBar({required this.pct});
+  const _BatteryIndicator({required this.pct});
 
   @override
   Widget build(BuildContext context) {
     final color = WeatherUtils.batteryColor(pct);
-    return Row(
-      children: [
-        Icon(
-          pct > 75
-              ? Icons.battery_full
-              : pct > 40
-                  ? Icons.battery_4_bar
-                  : Icons.battery_2_bar,
-          color: color,
-          size: 16,
-        ),
-        const SizedBox(width: 4),
-        SizedBox(
-          width: 80,
-          height: 6,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: LinearProgressIndicator(
-              value: pct / 100.0,
-              backgroundColor: Colors.white24,
-              valueColor: AlwaysStoppedAnimation(color),
-            ),
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          '$pct %',
-          style: TextStyle(color: color, fontSize: 12),
-        ),
-      ],
-    );
-  }
-}
-
-// ── Mini-Sparkline ────────────────────────────────────────────────────────────
-
-class _Sparkline extends StatelessWidget {
-  final List<MeasurementPoint> points;
-  const _Sparkline({required this.points});
-
-  @override
-  Widget build(BuildContext context) {
-    final temps = points.map((p) => p.temperature).toList();
-    final minT = temps.reduce((a, b) => a < b ? a : b);
-    final maxT = temps.reduce((a, b) => a > b ? a : b);
-    final spots = [
-      for (var i = 0; i < temps.length; i++) FlSpot(i.toDouble(), temps[i]),
-    ];
-
-    return SizedBox(
-      width: 90,
-      height: 54,
-      child: LineChart(
-        LineChartData(
-          minY: minT - 1,
-          maxY: maxT + 1,
-          gridData: const FlGridData(show: false),
-          borderData: FlBorderData(show: false),
-          titlesData: const FlTitlesData(show: false),
-          lineTouchData: const LineTouchData(enabled: false),
-          lineBarsData: [
-            LineChartBarData(
-              spots: spots,
-              isCurved: true,
-              color: Colors.white,
-              barWidth: 2,
-              dotData: const FlDotData(show: false),
-              belowBarData: BarAreaData(
-                show: true,
-                color: Colors.white.withValues(alpha: 0.15),
-              ),
-            ),
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
       ),
-    );
-  }
-}
-
-// ── Info-Chip ────────────────────────────────────────────────────────────────
-
-class _InfoChip extends StatelessWidget {
-  final IconData icon;
-  final String value;
-  const _InfoChip({required this.icon, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: Colors.white60, size: 14),
+          Icon(
+            pct > 80 ? Icons.battery_full : Icons.battery_charging_full,
+            color: color,
+            size: 14,
+          ),
           const SizedBox(width: 4),
-          Text(value, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          Text(
+            '$pct%',
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-// ── Fehler ───────────────────────────────────────────────────────────────────
+class _MiniChart extends StatelessWidget {
+  final List<MeasurementPoint> points;
+  const _MiniChart({required this.points});
+
+  @override
+  Widget build(BuildContext context) {
+    final temps = points.map((p) => p.temperature).toList();
+    final minT = temps.reduce((a, b) => a < b ? a : b);
+    final maxT = temps.reduce((a, b) => a > b ? a : b);
+
+    return SizedBox(
+      width: 100,
+      height: 50,
+      child: LineChart(
+        LineChartData(
+          minY: minT - 0.5,
+          maxY: maxT + 0.5,
+          gridData: const FlGridData(show: false),
+          titlesData: const FlTitlesData(show: false),
+          borderData: FlBorderData(show: false),
+          lineTouchData: const LineTouchData(enabled: false),
+          lineBarsData: [
+            LineChartBarData(
+              spots: points.asMap().entries.map((e) {
+                return FlSpot(e.key.toDouble(), e.value.temperature);
+              }).toList(),
+              isCurved: true,
+              curveSmoothness: 0.4,
+              color: Colors.white,
+              barWidth: 2,
+              dotData: const FlDotData(show: false),
+              belowBarData: BarAreaData(
+                show: true,
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.white.withOpacity(0.3),
+                    Colors.white.withOpacity(0.0),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SecondaryInfo extends StatelessWidget {
+  final Measurement measurement;
+  const _SecondaryInfo({required this.measurement});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        _InfoLabel(
+          icon: Icons.water_drop,
+          label: '${measurement.humidity.toStringAsFixed(0)}%',
+        ),
+        const SizedBox(height: 4),
+        _InfoLabel(
+          icon: Icons.compress,
+          label: '${measurement.relPressure.toStringAsFixed(0)} hPa',
+        ),
+      ],
+    );
+  }
+}
+
+class _InfoLabel extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _InfoLabel({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: Colors.white60, size: 14),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white, fontSize: 13),
+        ),
+      ],
+    );
+  }
+}
 
 class _ErrorRow extends StatelessWidget {
   final String error;
@@ -341,19 +399,24 @@ class _ErrorRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Icon(Icons.cloud_off, color: Colors.white70, size: 18),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            error,
-            style: const TextStyle(color: Colors.white70, fontSize: 12),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: Colors.white, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              error,
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

@@ -1,16 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../models/models.dart';
 import '../services/services.dart';
 import '../widgets/weather_utils.dart';
 
-/// Geräte-Setup in drei Schritten:
-///  1. Manuell (nur API-URL) oder Soft-AP
-///  2. Soft-AP: Mit ESP-Hotspot verbinden → Config senden
-///  3. Gerät benennen und speichern
 class DeviceSetupScreen extends StatefulWidget {
-  final Device? device; // gesetzt = Edit-Modus
+  final Device? device;
   const DeviceSetupScreen({super.key, this.device});
 
   @override
@@ -18,386 +15,312 @@ class DeviceSetupScreen extends StatefulWidget {
 }
 
 class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
-  // Schritt 0 = Methode wählen, 1 = Soft-AP, 2 = Manuell, 3 = Abschluss
-  int _step = 0;
+  final PageController _pageController = PageController();
+  int _currentPage = 0;
   bool _busy = false;
   String? _error;
 
-  // Formular-Felder
+  // Formular-Zustand
   final _nameCtrl        = TextEditingController(text: 'Meine Station');
-  final _apiHostCtrl     = TextEditingController();
+  final _apiHostCtrl     = TextEditingController(text: 'timm-sander.net');
   final _apiPathCtrl     = TextEditingController(text: '/sws/api/v1/data');
   final _apiUserCtrl     = TextEditingController();
   final _apiPassCtrl     = TextEditingController();
   final _stationSlugCtrl = TextEditingController();
   bool _apiHttps         = true;
-  int  _iconIndex        = 0; // Geraete-Avatar
+  int  _iconIndex        = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    final d = widget.device;
-    if (d != null) {
-      _nameCtrl.text        = d.name;
-      _apiHostCtrl.text     = d.apiHost;
-      _apiPathCtrl.text     = d.apiPath;
-      _apiUserCtrl.text     = d.apiUser;
-      _apiPassCtrl.text     = d.apiPassword;
-      _stationSlugCtrl.text = d.stationSlug;
-      _apiHttps             = d.apiHttps;
-      _iconIndex            = d.iconIndex;
-      _step = 2; // direkt in Formular-Schritt
-    }
-  }
-
-  // Soft-AP spezifisch
+  // Soft-AP Zustand
   final _ssidCtrl    = TextEditingController();
   final _passCtrl    = TextEditingController();
   final _setupService = DeviceSetupService();
 
   @override
-  void dispose() {
-	for (final c in [_nameCtrl, _apiHostCtrl, _apiPathCtrl, _apiUserCtrl, _apiPassCtrl, _stationSlugCtrl, _ssidCtrl, _passCtrl]) {
-	  c.dispose();
-	}
-	super.dispose();
+  void initState() {
+    super.initState();
+    if (widget.device != null) {
+      final d = widget.device!;
+      _nameCtrl.text = d.name;
+      _apiHostCtrl.text = d.apiHost;
+      _apiPathCtrl.text = d.apiPath;
+      _apiUserCtrl.text = d.apiUser;
+      _apiPassCtrl.text = d.apiPassword;
+      _stationSlugCtrl.text = d.stationSlug;
+      _apiHttps = d.apiHttps;
+      _iconIndex = d.iconIndex;
+      _currentPage = 2; // Direkt zum Formular im Edit-Modus
+    }
+  }
+
+  void _nextPage() {
+    _pageController.nextPage(
+      duration: 400.ms,
+      curve: Curves.easeInOutCubic,
+    );
+  }
+
+  void _prevPage() {
+    _pageController.previousPage(
+      duration: 400.ms,
+      curve: Curves.easeInOutCubic,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-	return Scaffold(
-	  appBar: AppBar(
-		title: Text(widget.device != null ? 'Gerät bearbeiten' : 'Gerät hinzufügen'),
-		leading: _step > 0
-			? IconButton(
-				icon: const Icon(Icons.arrow_back),
-				onPressed: _busy ? null : () => setState(() {
-				  _step = 0;
-				  _error = null;
-				}),
-			  )
-			: null,
-	  ),
-	  body: SafeArea(
-		child: AnimatedSwitcher(
-		  duration: const Duration(milliseconds: 250),
-		  child: _buildStep(),
-		),
-	  ),
-	);
+    final theme = Theme.of(context);
+    
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.device != null ? 'Gerät anpassen' : 'Neues Gerät'),
+        centerTitle: true,
+      ),
+      body: Column(
+        children: [
+          // Fortschrittsbalken oben
+          if (widget.device == null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                  value: (_currentPage + 1) / 4,
+                  minHeight: 6,
+                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                ),
+              ),
+            ),
+          
+          Expanded(
+            child: PageView(
+              controller: _pageController,
+              physics: const NeverScrollableScrollPhysics(),
+              onPageChanged: (idx) => setState(() => _currentPage = idx),
+              children: [
+                _MethodStep(
+                  onManual: () {
+                    setState(() => _currentPage = 2);
+                    _pageController.jumpToPage(2);
+                  },
+                  onSoftAp: _nextPage,
+                ),
+                _SoftApStep(
+                  ssidCtrl: _ssidCtrl,
+                  passCtrl: _passCtrl,
+                  busy: _busy,
+                  onNext: _nextPage,
+                ),
+                _ConfigStep(
+                  nameCtrl: _nameCtrl,
+                  apiHostCtrl: _apiHostCtrl,
+                  apiPathCtrl: _apiPathCtrl,
+                  apiUserCtrl: _apiUserCtrl,
+                  apiPassCtrl: _apiPassCtrl,
+                  stationSlugCtrl: _stationSlugCtrl,
+                  apiHttps: _apiHttps,
+                  onHttpsChanged: (v) => setState(() => _apiHttps = v),
+                  iconIndex: _iconIndex,
+                  onIconChanged: (i) => setState(() => _iconIndex = i),
+                  onSave: _saveDevice,
+                  busy: _busy,
+                  error: _error,
+                ),
+                _SuccessStep(
+                  name: _nameCtrl.text,
+                  onDone: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  Widget _buildStep() {
-	return switch (_step) {
-	  0 => _MethodSelector(
-		  key: const ValueKey(0),
-		  onManual:  () => setState(() => _step = 2),
-		  onSoftAp:  () => setState(() => _step = 1),
-		),
-	  1 => _SoftApSetup(
-		  key: const ValueKey(1),
-		  ssidCtrl:    _ssidCtrl,
-		  passCtrl:    _passCtrl,
-		  apiHostCtrl: _apiHostCtrl,
-		  apiPathCtrl: _apiPathCtrl,
-		  apiHttps:    _apiHttps,
-		  onHttpsChanged: (v) => setState(() => _apiHttps = v),
-		  busy:  _busy,
-		  error: _error,
-		  onSend: _doSoftApSetup,
-		),
-	  2 => _ManualSetup(
-		  key: const ValueKey(2),
-		  nameCtrl:        _nameCtrl,
-		  apiHostCtrl:     _apiHostCtrl,
-		  apiPathCtrl:     _apiPathCtrl,
-		  apiUserCtrl:     _apiUserCtrl,
-		  apiPassCtrl:     _apiPassCtrl,
-		  stationSlugCtrl: _stationSlugCtrl,
-		  apiHttps:    _apiHttps,
-		  onHttpsChanged: (v) => setState(() => _apiHttps = v),
-		  iconIndex: _iconIndex,
-		  onIconChanged: (i) => setState(() => _iconIndex = i),
-		  busy:  _busy,
-		  error: _error,
-		  onSave: _saveManual,
-		),
-	  3 => _SuccessStep(
-		  key: const ValueKey(3),
-		  name: _nameCtrl.text,
-		  onDone: () => Navigator.pop(context),
-		),
-	  _ => const SizedBox.shrink(),
-	};
-  }
+  Future<void> _saveDevice() async {
+    setState(() { _busy = true; _error = null; });
+    try {
+      final existing = widget.device;
+      final device = Device(
+        id: existing?.id ?? const Uuid().v4(),
+        name: _nameCtrl.text.trim(),
+        apiHost: _apiHostCtrl.text.trim(),
+        apiPath: _apiPathCtrl.text.trim(),
+        apiHttps: _apiHttps,
+        apiUser: _apiUserCtrl.text.trim(),
+        apiPassword: _apiPassCtrl.text,
+        stationSlug: _stationSlugCtrl.text.trim(),
+        iconIndex: _iconIndex,
+      );
 
-  // ---- Soft-AP Flow ----
-
-  Future<void> _doSoftApSetup() async {
-	setState(() { _busy = true; _error = null; });
-	try {
-	  // 1. Mit ESP-Hotspot verbinden
-	  _showSnack('Verbinde mit ESP-Hotspot…');
-	  final ok = await _setupService.connectToDevice(_ssidCtrl.text.trim());
-	  if (!ok) throw Exception('WLAN-Verbindung fehlgeschlagen. Bitte manuell verbinden und erneut versuchen.');
-
-	  // 2. Config senden
-	  _showSnack('Sende Konfiguration…');
-	  await _setupService.sendConfig(
-		wifiSsid: _ssidCtrl.text.trim(),
-		wifiPass: _passCtrl.text,
-		apiHost:  _apiHostCtrl.text.trim(),
-		apiPath:  _apiPathCtrl.text.trim(),
-		apiHttps: _apiHttps,
-	  );
-
-	  // 3. Gerät im lokalen Heimnetz registrieren
-	  await _setupService.disconnect();
-	  await _addDevice();
-	  setState(() => _step = 3);
-	} catch (e) {
-	  setState(() => _error = e.toString());
-	} finally {
-	  setState(() => _busy = false);
-	}
-  }
-
-  // ---- Manuelle Eingabe ----
-
-  Future<void> _saveManual() async {
-	if (_apiHostCtrl.text.trim().isEmpty) {
-	  setState(() => _error = 'Bitte API-Host eingeben.');
-	  return;
-	}
-	setState(() { _busy = true; _error = null; });
-	try {
-	  await _addDevice();
-	  setState(() => _step = 3);
-	} catch (e) {
-	  setState(() => _error = e.toString());
-	} finally {
-	  setState(() => _busy = false);
-	}
-  }
-
-  Future<void> _addDevice() async {
-	final existing = widget.device;
-	final device = Device(
-	  id:          existing?.id ?? const Uuid().v4(),
-	  name:        _nameCtrl.text.trim().isEmpty ? 'Station' : _nameCtrl.text.trim(),
-	  apiHost:     _apiHostCtrl.text.trim(),
-	  apiPath:     _apiPathCtrl.text.trim(),
-	  apiHttps:    _apiHttps,
-	  apiUser:     _apiUserCtrl.text.trim(),
-	  apiPassword: _apiPassCtrl.text,
-	  stationSlug: _stationSlugCtrl.text.trim(),
-	  iconIndex:   _iconIndex,
-	);
-	if (!mounted) return;
-	final provider = context.read<DeviceProvider>();
-	if (existing != null) {
-	  await provider.updateDevice(device);
-	} else {
-	  await provider.addDevice(device);
-	}
-  }
-
-  void _showSnack(String msg) {
-	if (!mounted) return;
-	ScaffoldMessenger.of(context).showSnackBar(
-	  SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
-	);
+      final provider = context.read<DeviceProvider>();
+      if (existing != null) {
+        await provider.updateDevice(device);
+      } else {
+        await provider.addDevice(device);
+      }
+      _nextPage();
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      setState(() => _busy = false);
+    }
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Schritt 0: Methode wählen
-// ─────────────────────────────────────────────────────────────
-class _MethodSelector extends StatelessWidget {
+// --- SUB-WIDGETS ---
+
+class _MethodStep extends StatelessWidget {
   final VoidCallback onManual;
   final VoidCallback onSoftAp;
 
-  const _MethodSelector({super.key, required this.onManual, required this.onSoftAp});
+  const _MethodStep({required this.onManual, required this.onSoftAp});
 
   @override
   Widget build(BuildContext context) {
-	return Padding(
-	  padding: const EdgeInsets.all(24),
-	  child: Column(
-		crossAxisAlignment: CrossAxisAlignment.stretch,
-		children: [
-		  const Text(
-			'Wie möchtest du das Gerät hinzufügen?',
-			style: TextStyle(fontSize: 16),
-		  ),
-		  const SizedBox(height: 32),
-		  _OptionCard(
-			icon: Icons.wifi,
-			title: 'Soft-AP Setup',
-			subtitle: 'Gerät ist im Einrichtungsmodus (blinkt). '
-				'App verbindet sich direkt und sendet die WLAN-Daten.',
-			onTap: onSoftAp,
-		  ),
-		  const SizedBox(height: 16),
-		  _OptionCard(
-			icon: Icons.edit_outlined,
-			title: 'Manuell',
-			subtitle: 'Gerät ist bereits im Netz. '
-				'API-URL direkt eingeben.',
-			onTap: onManual,
-		  ),
-		],
-	  ),
-	);
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.add_to_home_screen_rounded, size: 80, color: Colors.blue)
+              .animate()
+              .scale(duration: 600.ms, curve: Curves.easeOutBack),
+          const SizedBox(height: 24),
+          Text(
+            'Einrichtung starten',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Wie möchtest du deine Wetterstation verbinden?',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey),
+          ),
+          const SizedBox(height: 40),
+          _MethodCard(
+            title: 'Automatisches Setup',
+            subtitle: 'Empfohlen: App sendet WLAN-Daten direkt an das Gerät.',
+            icon: Icons.auto_fix_high_rounded,
+            onTap: onSoftAp,
+            isPrimary: true,
+          ),
+          const SizedBox(height: 16),
+          _MethodCard(
+            title: 'Manuelle Eingabe',
+            subtitle: 'Direkte Eingabe der API-URL (für Fortgeschrittene).',
+            icon: Icons.settings_ethernet_rounded,
+            onTap: onManual,
+            isPrimary: false,
+          ),
+        ],
+      ),
+    );
   }
 }
 
-class _OptionCard extends StatelessWidget {
-  final IconData icon;
+class _MethodCard extends StatelessWidget {
   final String title;
   final String subtitle;
+  final IconData icon;
   final VoidCallback onTap;
+  final bool isPrimary;
 
-  const _OptionCard({
-	required this.icon,
-	required this.title,
-	required this.subtitle,
-	required this.onTap,
+  const _MethodCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+    required this.isPrimary,
   });
 
   @override
   Widget build(BuildContext context) {
-	return Card(
-	  child: InkWell(
-		onTap: onTap,
-		borderRadius: BorderRadius.circular(12),
-		child: Padding(
-		  padding: const EdgeInsets.all(20),
-		  child: Row(
-			children: [
-			  Icon(icon, size: 36, color: Theme.of(context).colorScheme.primary),
-			  const SizedBox(width: 16),
-			  Expanded(
-				child: Column(
-				  crossAxisAlignment: CrossAxisAlignment.start,
-				  children: [
-					Text(title,
-						style: const TextStyle(
-							fontSize: 16, fontWeight: FontWeight.bold)),
-					const SizedBox(height: 4),
-					Text(subtitle,
-						style: const TextStyle(
-							fontSize: 13, color: Colors.grey)),
-				  ],
-				),
-			  ),
-			  const Icon(Icons.chevron_right),
-			],
-		  ),
-		),
-	  ),
-	);
+    final theme = Theme.of(context);
+    return Card(
+      elevation: isPrimary ? 4 : 0,
+      color: isPrimary ? theme.colorScheme.primaryContainer : theme.colorScheme.surfaceContainerLow,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Row(
+            children: [
+              Icon(icon, size: 32, color: isPrimary ? theme.colorScheme.onPrimaryContainer : theme.colorScheme.primary),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 4),
+                    Text(subtitle, style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Schritt 1: Soft-AP
-// ─────────────────────────────────────────────────────────────
-class _SoftApSetup extends StatelessWidget {
+class _SoftApStep extends StatelessWidget {
   final TextEditingController ssidCtrl;
   final TextEditingController passCtrl;
-  final TextEditingController apiHostCtrl;
-  final TextEditingController apiPathCtrl;
-  final bool apiHttps;
-  final ValueChanged<bool> onHttpsChanged;
   final bool busy;
-  final String? error;
-  final VoidCallback onSend;
+  final VoidCallback onNext;
 
-  const _SoftApSetup({
-	super.key,
-	required this.ssidCtrl,
-	required this.passCtrl,
-	required this.apiHostCtrl,
-	required this.apiPathCtrl,
-	required this.apiHttps,
-	required this.onHttpsChanged,
-	required this.busy,
-	required this.error,
-	required this.onSend,
+  const _SoftApStep({
+    required this.ssidCtrl,
+    required this.passCtrl,
+    required this.busy,
+    required this.onNext,
   });
 
   @override
   Widget build(BuildContext context) {
-	return SingleChildScrollView(
-	  padding: const EdgeInsets.all(24),
-	  child: Column(
-		crossAxisAlignment: CrossAxisAlignment.stretch,
-		children: [
-		  const _StepHint(
-			icon: Icons.info_outline,
-			text: 'Halte den Config-Taster des Geräts 2 Sekunden gedrückt, '
-				'bis es einen WLAN-Hotspot öffnet (z.B. "SWS-Display").',
-		  ),
-		  const SizedBox(height: 24),
-		  _label('Heimnetz WLAN-Name (SSID)'),
-		  TextField(
-			controller: ssidCtrl,
-			decoration: const InputDecoration(hintText: 'Mein WLAN'),
-		  ),
-		  const SizedBox(height: 12),
-		  _label('WLAN-Passwort'),
-		  TextField(
-			controller: passCtrl,
-			obscureText: true,
-			decoration: const InputDecoration(hintText: '••••••••'),
-		  ),
-		  const SizedBox(height: 20),
-		  _label('API-Host'),
-		  TextField(
-			controller: apiHostCtrl,
-			keyboardType: TextInputType.url,
-			decoration: const InputDecoration(hintText: 'meinserver.de'),
-		  ),
-		  const SizedBox(height: 12),
-		  _label('API-Pfad'),
-		  TextField(
-			controller: apiPathCtrl,
-			decoration: const InputDecoration(hintText: '/sws/api/v1/data'),
-		  ),
-		  const SizedBox(height: 12),
-		  SwitchListTile(
-			value: apiHttps,
-			onChanged: onHttpsChanged,
-			title: const Text('HTTPS verwenden'),
-			contentPadding: EdgeInsets.zero,
-		  ),
-		  if (error != null) ...[
-			const SizedBox(height: 12),
-			Text(error!, style: const TextStyle(color: Colors.red)),
-		  ],
-		  const SizedBox(height: 24),
-		  FilledButton.icon(
-			onPressed: busy ? null : onSend,
-			icon: busy
-				? const SizedBox(
-					width: 18,
-					height: 18,
-					child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-				  )
-				: const Icon(Icons.send),
-			label: Text(busy ? 'Sende…' : 'Konfiguration senden'),
-		  ),
-		],
-	  ),
-	);
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          const Icon(Icons.wifi_tethering_rounded, size: 64, color: Colors.blue),
+          const SizedBox(height: 24),
+          const Text(
+            'Gerät vorbereiten',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            '1. Halte den Button am Gerät für 2 Sek. gedrückt.\n2. Warte bis die LED blinkt.\n3. Gib hier deine WLAN-Daten ein.',
+            textAlign: TextAlign.center,
+            style: TextStyle(height: 1.5, color: Colors.grey),
+          ),
+          const SizedBox(height: 32),
+          TextField(
+            controller: ssidCtrl,
+            decoration: const InputDecoration(labelText: 'WLAN Name (SSID)', prefixIcon: Icon(Icons.wifi)),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: passCtrl,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: 'WLAN Passwort', prefixIcon: Icon(Icons.lock_outline)),
+          ),
+          const SizedBox(height: 40),
+          FilledButton(
+            onPressed: onNext,
+            child: const Center(child: Text('Weiter zur API-Konfiguration')),
+          ),
+        ],
+      ),
+    );
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Schritt 2: Manuell
-// ─────────────────────────────────────────────────────────────
-class _ManualSetup extends StatelessWidget {
+class _ConfigStep extends StatelessWidget {
   final TextEditingController nameCtrl;
   final TextEditingController apiHostCtrl;
   final TextEditingController apiPathCtrl;
@@ -408,217 +331,126 @@ class _ManualSetup extends StatelessWidget {
   final ValueChanged<bool> onHttpsChanged;
   final int iconIndex;
   final ValueChanged<int> onIconChanged;
+  final VoidCallback onSave;
   final bool busy;
   final String? error;
-  final VoidCallback onSave;
 
-  const _ManualSetup({
-	super.key,
-	required this.nameCtrl,
-	required this.apiHostCtrl,
-	required this.apiPathCtrl,
-	required this.apiUserCtrl,
-	required this.apiPassCtrl,
-	required this.stationSlugCtrl,
-	required this.apiHttps,
-	required this.onHttpsChanged,
-	required this.iconIndex,
-	required this.onIconChanged,
-	required this.busy,
-	required this.error,
-	required this.onSave,
+  const _ConfigStep({
+    required this.nameCtrl,
+    required this.apiHostCtrl,
+    required this.apiPathCtrl,
+    required this.apiUserCtrl,
+    required this.apiPassCtrl,
+    required this.stationSlugCtrl,
+    required this.apiHttps,
+    required this.onHttpsChanged,
+    required this.iconIndex,
+    required this.onIconChanged,
+    required this.onSave,
+    required this.busy,
+    required this.error,
   });
 
   @override
   Widget build(BuildContext context) {
-	return SingleChildScrollView(
-	  padding: const EdgeInsets.all(24),
-	  child: Column(
-		crossAxisAlignment: CrossAxisAlignment.stretch,
-		children: [
-		  _label('Name'),
-		  TextField(
-			controller: nameCtrl,
-			decoration: const InputDecoration(hintText: 'z.B. Garten'),
-		  ),
-		  const SizedBox(height: 12),
-		  _label('API-Host'),
-		  TextField(
-			controller: apiHostCtrl,
-			keyboardType: TextInputType.url,
-			decoration: const InputDecoration(hintText: 'meinserver.de'),
-		  ),
-		  const SizedBox(height: 12),
-		  _label('API-Pfad'),
-		  TextField(
-			controller: apiPathCtrl,
-			decoration: const InputDecoration(hintText: '/sws/api/v1/data'),
-		  ),
-		  const SizedBox(height: 12),
-		  _label('API-Benutzername (optional)'),
-		  TextField(
-			controller: apiUserCtrl,
-			decoration: const InputDecoration(hintText: 'Leer lassen wenn keine Auth'),
-		  ),
-		  const SizedBox(height: 12),
-		  _label('API-Passwort'),
-		  TextField(
-			controller: apiPassCtrl,
-			obscureText: true,
-			decoration: const InputDecoration(hintText: '••••••••'),
-		  ),
-		  const SizedBox(height: 12),
-		  _label('Station-Slug (fuer Verlaufsdaten)'),
-		  TextField(
-			controller: stationSlugCtrl,
-			decoration: const InputDecoration(hintText: 'z.B. waggum'),
-		  ),
-		  const SizedBox(height: 12),
-		  SwitchListTile(
-			value: apiHttps,
-			onChanged: onHttpsChanged,
-			title: const Text('HTTPS verwenden'),
-			contentPadding: EdgeInsets.zero,
-		  ),
-		  const SizedBox(height: 16),
-		  _label('Geraete-Symbol'),
-		  const SizedBox(height: 8),
-		  Wrap(
-			spacing: 10,
-			runSpacing: 10,
-			children: [
-			  for (var i = 0; i < WeatherUtils.deviceIcons.length; i++)
-				GestureDetector(
-				  onTap: () => onIconChanged(i),
-				  child: AnimatedContainer(
-					duration: const Duration(milliseconds: 200),
-					width: 52,
-					height: 52,
-					decoration: BoxDecoration(
-					  color: i == iconIndex
-						  ? Theme.of(context).colorScheme.primaryContainer
-						  : Theme.of(context).colorScheme.surfaceContainerHighest,
-					  borderRadius: BorderRadius.circular(12),
-					  border: i == iconIndex
-						  ? Border.all(
-							  color: Theme.of(context).colorScheme.primary,
-							  width: 2,
-							)
-						  : null,
-					),
-					child: Tooltip(
-					  message: WeatherUtils.deviceIconLabels[i],
-					  child: Icon(
-						WeatherUtils.deviceIcons[i],
-						size: 26,
-						color: i == iconIndex
-							? Theme.of(context).colorScheme.primary
-							: Theme.of(context).colorScheme.onSurfaceVariant,
-					  ),
-					),
-				  ),
-				),
-			],
-		  ),
-		  if (error != null) ...[
-			const SizedBox(height: 12),
-			Text(error!, style: const TextStyle(color: Colors.red)),
-		  ],
-		  const SizedBox(height: 24),
-		  FilledButton.icon(
-			onPressed: busy ? null : onSave,
-			icon: busy
-				? const SizedBox(
-					width: 18,
-					height: 18,
-					child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-				  )
-				: const Icon(Icons.check),
-			label: Text(busy ? 'Speichere...' : 'Geraet speichern'),
-		  ),
-		],
-	  ),
-	);
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _label('Gerätename'),
+          TextField(controller: nameCtrl, decoration: const InputDecoration(hintText: 'z.B. Garten')),
+          const SizedBox(height: 20),
+          _label('Server Adresse'),
+          TextField(controller: apiHostCtrl, decoration: const InputDecoration(hintText: 'meinserver.de')),
+          const SizedBox(height: 12),
+          _label('API Pfad'),
+          TextField(controller: apiPathCtrl, decoration: const InputDecoration(hintText: '/sws/api/v1/data')),
+          const SizedBox(height: 12),
+          SwitchListTile(
+            value: apiHttps,
+            onChanged: onHttpsChanged,
+            title: const Text('Sichere Verbindung (HTTPS)'),
+            contentPadding: EdgeInsets.zero,
+          ),
+          const Divider(height: 40),
+          _label('Station Symbol'),
+          const SizedBox(height: 8),
+          _IconPicker(selected: iconIndex, onChanged: onIconChanged),
+          const SizedBox(height: 32),
+          if (error != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(error!, style: const TextStyle(color: Colors.red, fontSize: 13)),
+            ),
+          FilledButton.icon(
+            onPressed: busy ? null : onSave,
+            icon: busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.check),
+            label: Text(busy ? 'Speichere...' : 'Einrichtung abschließen'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _label(String text) => Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey));
+}
+
+class _IconPicker extends StatelessWidget {
+  final int selected;
+  final ValueChanged<int> onChanged;
+
+  const _IconPicker({required this.selected, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: List.generate(WeatherUtils.deviceIcons.length, (i) {
+        final isSelected = selected == i;
+        return GestureDetector(
+          onTap: () => onChanged(i),
+          child: AnimatedContainer(
+            duration: 200.ms,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isSelected ? Colors.blue.withOpacity(0.1) : Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: isSelected ? Colors.blue : Colors.grey.withOpacity(0.3), width: 2),
+            ),
+            child: Icon(WeatherUtils.deviceIcons[i], color: isSelected ? Colors.blue : Colors.grey),
+          ),
+        );
+      }),
+    );
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Schritt 3: Erfolg
-// ─────────────────────────────────────────────────────────────
 class _SuccessStep extends StatelessWidget {
   final String name;
   final VoidCallback onDone;
 
-  const _SuccessStep({super.key, required this.name, required this.onDone});
+  const _SuccessStep({required this.name, required this.onDone});
 
   @override
   Widget build(BuildContext context) {
-	return Center(
-	  child: Padding(
-		padding: const EdgeInsets.all(32),
-		child: Column(
-		  mainAxisSize: MainAxisSize.min,
-		  children: [
-			const Icon(Icons.check_circle, color: Colors.green, size: 72),
-			const SizedBox(height: 16),
-			Text(
-			  '"$name" wurde hinzugefügt!',
-			  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-			  textAlign: TextAlign.center,
-			),
-			const SizedBox(height: 8),
-			const Text(
-			  'Daten werden nun automatisch abgerufen.',
-			  style: TextStyle(color: Colors.grey),
-			  textAlign: TextAlign.center,
-			),
-			const SizedBox(height: 32),
-			FilledButton(onPressed: onDone, child: const Text('Zum Dashboard')),
-		  ],
-		),
-	  ),
-	);
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-//  Hilfsfunktionen
-// ─────────────────────────────────────────────────────────────
-Widget _label(String text) => Padding(
-	  padding: const EdgeInsets.only(bottom: 6),
-	  child: Text(text,
-		  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-	);
-
-class _StepHint extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  const _StepHint({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-	return Container(
-	  padding: const EdgeInsets.all(12),
-	  decoration: BoxDecoration(
-		color: Theme.of(context).colorScheme.primaryContainer,
-		borderRadius: BorderRadius.circular(8),
-	  ),
-	  child: Row(
-		crossAxisAlignment: CrossAxisAlignment.start,
-		children: [
-		  Icon(icon, size: 18,
-			  color: Theme.of(context).colorScheme.onPrimaryContainer),
-		  const SizedBox(width: 8),
-		  Expanded(
-			child: Text(
-			  text,
-			  style: TextStyle(
-				  fontSize: 13,
-				  color: Theme.of(context).colorScheme.onPrimaryContainer),
-			),
-		  ),
-		],
-	  ),
-	);
+    return Padding(
+      padding: const EdgeInsets.all(32.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.celebration_rounded, size: 80, color: Colors.orange)
+              .animate()
+              .shake(duration: 500.ms),
+          const SizedBox(height: 24),
+          const Text('Alles bereit!', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          Text('Die Station "$name" wurde erfolgreich eingerichtet.', textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey)),
+          const SizedBox(height: 48),
+          FilledButton(onPressed: onDone, child: const Center(child: Text('Zum Dashboard'))),
+        ],
+      ),
+    );
   }
 }

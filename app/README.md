@@ -19,7 +19,7 @@ flutter pub get
 
 # Firebase konfigurieren (einmalig)
 # 1. Firebase Console → Projekt erstellen
-# 2. Android-App registrieren (Package: com.sws.companion)
+# 2. Android-App registrieren (Package: net.timm_sander.sws)
 # 3. google-services.json herunterladen → app/android/app/google-services.json
 
 # Debug-Build starten

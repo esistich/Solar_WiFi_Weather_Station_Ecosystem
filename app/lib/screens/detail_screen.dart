@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../models/models.dart';
 import '../services/services.dart';
 import '../widgets/widgets.dart';
 import 'settings_screen.dart';
 
-/// Detail-Ansicht eines Geräts: aktuelle Werte + History-Chart.
 class DetailScreen extends StatefulWidget {
   final Device device;
+  final bool isEmbedded; // Neu für Tablet-Layout
 
-  const DetailScreen({super.key, required this.device});
+  const DetailScreen({super.key, required this.device, this.isEmbedded = false});
 
   @override
   State<DetailScreen> createState() => _DetailScreenState();
@@ -21,98 +22,149 @@ class _DetailScreenState extends State<DetailScreen> {
   String? _historyError;
   int _selectedHours = 24;
   late final ApiService _api;
-  late Device _device; // lokal aktualisierbar nach Rename
+  late Device _device;
 
   @override
   void initState() {
-	super.initState();
-	_device = widget.device;
-	_api = ApiService();
-	_loadHistory();
+    super.initState();
+    _device = widget.device;
+    _api = ApiService();
+    _loadHistory();
   }
 
   @override
   void dispose() {
-	_api.dispose();
-	super.dispose();
+    _api.dispose();
+    super.dispose();
   }
 
-  /// Zeigt Dialog zum Aendern von Stationsname und Slug.
-  Future<void> _showRenameDialog() async {
-    final nameCtrl = TextEditingController(text: _device.name);
-    final slugCtrl = TextEditingController(text: _device.stationSlug);
-    String? dialogError;
+  Future<void> _loadHistory() async {
+    setState(() {
+      _loadingHistory = true;
+      _historyError = null;
+    });
+    try {
+      final auth = context.read<AuthService>();
+      if (!auth.isLoggedIn) {
+        setState(() {
+          _loadingHistory = false;
+          _history = [];
+        });
+        return;
+      }
+      
+      final result = await _api.fetchHistory(
+        _device,
+        hours: _selectedHours,
+        bearerToken: auth.currentUser?.token,
+      );
+      
+      if (result.error != null) {
+        setState(() => _historyError = result.error);
+      } else {
+        setState(() => _history = result.data ?? []);
+      }
+    } catch (e) {
+      setState(() => _historyError = 'Fehler beim Laden des Verlaufs');
+    } finally {
+      setState(() => _loadingHistory = false);
+    }
+  }
 
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Station umbenennen'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Name'),
-              const SizedBox(height: 4),
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(hintText: 'z.B. Waggum'),
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<DeviceProvider>();
+    final measurement = provider.measurementFor(_device.id);
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      appBar: widget.isEmbedded ? null : AppBar(
+        title: Text(_device.name),
+        // ... (falls wir im Embedded Mode sind, brauchen wir kein AppBar)
+      ),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          provider.refreshDevice(_device.id);
+          await _loadHistory();
+        },
+        child: CustomScrollView(
+          physics: const BouncingScrollPhysics(),
+          slivers: [
+            SliverAppBar.large(
+              expandedHeight: 200,
+              pinned: true,
+              stretch: true,
+              flexibleSpace: FlexibleSpaceBar(
+                stretchModes: const [StretchMode.zoomBackground],
+                title: Text(
+                  _device.name,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                background: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: WeatherUtils.gradientForZambretti(
+                          measurement?.zambretti ?? '',
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: -20,
+                      bottom: -20,
+                      child: Icon(
+                        WeatherUtils.iconForZambretti(
+                          measurement?.zambretti ?? '',
+                        ),
+                        color: Colors.white12,
+                        size: 200,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 12),
-              const Text('Slug (API-Bezeichner)'),
-              const SizedBox(height: 4),
-              TextField(
-                controller: slugCtrl,
-                decoration: const InputDecoration(hintText: 'z.B. waggum'),
-              ),
-              if (dialogError != null) ...[
-                const SizedBox(height: 8),
-                Text(dialogError!, style: const TextStyle(color: Colors.red)),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: _showRenameDialog,
+                ),
               ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Abbrechen'),
             ),
-            FilledButton(
-              onPressed: () async {
-                final auth = context.read<AuthService>();
-                final token = auth.currentUser?.token;
-                if (token == null) {
-                  setDialogState(() => dialogError = 'Nicht eingeloggt.');
-                  return;
-                }
-                final newName = nameCtrl.text.trim();
-                final newSlug = slugCtrl.text.trim().toLowerCase();
-                if (newName.isEmpty || newSlug.isEmpty) {
-                  setDialogState(() => dialogError = 'Name und Slug duerfen nicht leer sein.');
-                  return;
-                }
-                try {
-                  await _api.updateStation(
-                    _device,
-                    currentSlug: _device.stationSlug,
-                    name: newName,
-                    newSlug: newSlug,
-                    bearerToken: token,
-                  );
-                  // Lokales Device und gespeichertes Device aktualisieren
-                  final updated = _device.copyWith(
-                    name: newName,
-                    stationSlug: newSlug,
-                  );
-                  if (!mounted) return;
-                  await context.read<DeviceProvider>().updateDevice(updated);
-                  setState(() => _device = updated);
-                  if (!mounted) return;
-                  Navigator.pop(ctx);
-                } catch (e) {
-                  setDialogState(() => dialogError = e.toString());
-                }
-              },
-              child: const Text('Speichern'),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _CurrentDataCard(measurement: measurement),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Verlauf',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        _PeriodSelector(
+                          selected: _selectedHours,
+                          onChanged: (h) {
+                            setState(() => _selectedHours = h);
+                            _loadHistory();
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    _buildHistorySection(theme),
+                    const SizedBox(height: 32),
+                    _DeviceInfo(device: _device),
+                    const SizedBox(height: 40),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -120,335 +172,368 @@ class _DetailScreenState extends State<DetailScreen> {
     );
   }
 
-  Future<void> _loadHistory() async {
-	setState(() {
-	  _loadingHistory = true;
-	  _historyError = null;
-	});
-	try {
-	  final auth = context.read<AuthService>();
-	  // Verlauf erfordert JWT – nicht eingeloggt → Hinweis statt 401
-	  if (!auth.isLoggedIn) {
-		setState(() {
-		  _loadingHistory = false;
-		  _historyError = null;
-		  _history = [];
-		});
-		return;
-	  }
-	  final data = await _api.fetchHistory(
-		_device,
-		hours: _selectedHours,
-		bearerToken: auth.currentUser?.token,
-	  );
-	  setState(() => _history = data);
-	} catch (e) {
-	  setState(() => _historyError = e.toString());
-	} finally {
-	  setState(() => _loadingHistory = false);
-	}
+  Widget _buildHistorySection(ThemeData theme) {
+    if (_loadingHistory) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32.0),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_historyError != null) {
+      return Center(
+        child: Text(_historyError!, style: const TextStyle(color: Colors.red)),
+      );
+    }
+
+    if (_history.isEmpty) {
+      return _LoginHint(
+        onLogin: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SettingsScreen()),
+          );
+          _loadHistory();
+        },
+      );
+    }
+
+    return Column(
+      children: [
+        _ChartContainer(
+          title: 'Temperaturverlauf',
+          height: 260,
+          child: HistoryChart(points: _history),
+        ),
+        const SizedBox(height: 16),
+        _ChartContainer(
+          title: 'Luftfeuchtigkeit',
+          height: 200,
+          child: MetricChart(
+            points: _history,
+            unit: '%',
+            color: Colors.teal,
+            getValue: (p) => p.humidity,
+            intValues: true,
+          ),
+        ),
+        const SizedBox(height: 16),
+        _ChartContainer(
+          title: 'Luftdruck',
+          height: 200,
+          child: MetricChart(
+            points: _history,
+            unit: ' hPa',
+            color: Colors.indigo,
+            getValue: (p) => p.relPressure,
+          ),
+        ),
+        // DYNAMISCHE CHARTS FÜR EXTRAS
+        if (_history.isNotEmpty && _history.first.extraSensors.isNotEmpty) ...[
+          ..._history.first.extraSensors.keys.map((sensorKey) {
+            final info = WeatherUtils.sensorInfo(sensorKey);
+            return Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: _ChartContainer(
+                title: info.$2,
+                height: 200,
+                child: MetricChart(
+                  points: _history,
+                  unit: WeatherUtils.sensorUnit(sensorKey),
+                  color: Colors.blueGrey,
+                  getValue: (p) => p.extraSensors[sensorKey] ?? 0,
+                ),
+              ),
+            );
+          }),
+        ],
+      ],
+    ).animate().fadeIn(duration: 500.ms);
   }
+
+  Future<void> _showRenameDialog() async {
+    final nameCtrl = TextEditingController(text: _device.name);
+    final slugCtrl = TextEditingController(text: _device.stationSlug);
+    
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          left: 20, right: 20, top: 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Station bearbeiten', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 20),
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(labelText: 'Anzeigename'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: slugCtrl,
+              decoration: const InputDecoration(labelText: 'Station Slug (API)'),
+            ),
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: () async {
+                final auth = context.read<AuthService>();
+                try {
+                  final result = await _api.updateStation(
+                    _device,
+                    currentSlug: _device.stationSlug,
+                    name: nameCtrl.text,
+                    newSlug: slugCtrl.text,
+                    bearerToken: auth.currentUser?.token ?? '',
+                  );
+                  if (result.error != null) {
+                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.error!)));
+                    return;
+                  }
+                  final updated = _device.copyWith(name: nameCtrl.text, stationSlug: slugCtrl.text);
+                  await context.read<DeviceProvider>().updateDevice(updated);
+                  setState(() => _device = updated);
+                  Navigator.pop(ctx);
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                }
+              },
+              child: const Text('Speichern'),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CurrentDataCard extends StatelessWidget {
+  final Measurement? measurement;
+  const _CurrentDataCard({this.measurement});
 
   @override
   Widget build(BuildContext context) {
-	final provider = context.watch<DeviceProvider>();
-	final measurement = provider.measurementFor(_device.id);
-	final loading = provider.isLoading(_device.id);
+    if (measurement == null) return const SizedBox.shrink();
+    final m = measurement!;
 
-	return Scaffold(
-	  body: RefreshIndicator(
-		onRefresh: () async {
-		  provider.refreshDevice(_device.id);
-		  await _loadHistory();
-		},
-		child: CustomScrollView(
-		  slivers: [
-			// ── Gradient SliverAppBar ──────────────────────────────────────
-			SliverAppBar(
-			  expandedHeight: 160,
-			  pinned: true,
-			  flexibleSpace: FlexibleSpaceBar(
-				titlePadding: const EdgeInsets.fromLTRB(16, 0, 48, 12),
-				title: Text(
-				  _device.name,
-				  style: const TextStyle(
-					color: Colors.white,
-					fontSize: 18,
-					fontWeight: FontWeight.bold,
-					shadows: [Shadow(blurRadius: 4, color: Colors.black38)],
-				  ),
-				),
-				background: Container(
-				  decoration: BoxDecoration(
-					gradient: WeatherUtils.gradientForZambretti(
-					  measurement?.zambretti ?? '',
-					),
-				  ),
-				  child: Align(
-					alignment: Alignment.centerRight,
-					child: Padding(
-					  padding: const EdgeInsets.only(right: 20, bottom: 20),
-					  child: Icon(
-						WeatherUtils.iconForZambretti(
-						  measurement?.zambretti ?? '',
-						),
-						color: Colors.white30,
-						size: 80,
-					  ),
-					),
-				  ),
-				),
-			  ),
-			  actions: [
-				IconButton(
-				  icon: const Icon(Icons.edit_outlined, color: Colors.white),
-				  tooltip: 'Station umbenennen',
-				  onPressed: _showRenameDialog,
-				),
-				IconButton(
-				  icon: const Icon(Icons.refresh, color: Colors.white),
-				  onPressed: () {
-					provider.refreshDevice(_device.id);
-					_loadHistory();
-				  },
-				),
-			  ],
-			),
-			// ── Inhalt als Sliver ──────────────────────────────────────────
-			SliverPadding(
-			  padding: const EdgeInsets.all(16),
-			  sliver: SliverList(
-				delegate: SliverChildListDelegate([
-				  // Aktuelle Werte
-				  _CurrentValues(
-					measurement: measurement,
-					loading: loading,
-					error: provider.errorFor(_device.id),
-				  ),
-				  const SizedBox(height: 24),
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _StatusItem(
+                  icon: Icons.thermostat,
+                  label: 'Temperatur',
+                  value: '${m.temperature.toStringAsFixed(1)}°C',
+                  color: Colors.orange,
+                ),
+                _StatusItem(
+                  icon: Icons.water_drop,
+                  label: 'Feuchte',
+                  value: '${m.humidity.toStringAsFixed(0)}%',
+                  color: Colors.blue,
+                ),
+                _StatusItem(
+                  icon: Icons.compress,
+                  label: 'Luftdruck',
+                  value: '${m.relPressure.toStringAsFixed(0)}',
+                  color: Colors.purple,
+                ),
+              ],
+            ),
+            const Divider(height: 32),
+            _InfoRow(
+              label: 'Vorhersage', 
+              value: m.zambretti, 
+              icon: Icons.wb_sunny,
+              isWeather: true,
+            ),
+            _InfoRow(
+              label: 'Drucktrend', 
+              value: m.trend, 
+              icon: Icons.trending_up,
+              isTrend: true,
+            ),
+            _InfoRow(
+              label: 'Batterie', 
+              value: '${m.batteryPct}% (${m.batteryVolt.toStringAsFixed(2)}V)', 
+              icon: Icons.battery_charging_full
+            ),
+            if (m.extraSensors.isNotEmpty) ...[
+              const Divider(height: 32),
+              ...m.extraSensors.entries.map((e) {
+                final info = WeatherUtils.sensorInfo(e.key);
+                return _InfoRow(
+                  label: info.$2,
+                  value: '${e.value.toStringAsFixed(0)}${WeatherUtils.sensorUnit(e.key)}',
+                  icon: info.$1,
+                );
+              }),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
 
-				  // Zeitraum-Auswahl
-				  _PeriodSelector(
-					selected: _selectedHours,
-					onChanged: (h) {
-					  setState(() => _selectedHours = h);
-					  _loadHistory();
-					},
-				  ),
-				  const SizedBox(height: 16),
+class _StatusItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
 
-				  // Charts
-			if (_loadingHistory)
-			  const SizedBox(
-				height: 100,
-				child: Center(child: CircularProgressIndicator()),
-			  )
-			else if (_historyError != null)
-			  Padding(
-				padding: const EdgeInsets.symmetric(vertical: 16),
-				child: Text(
-				  _historyError!,
-				  style: const TextStyle(color: Colors.red),
-				),
-			  )
-			else if (_history.isEmpty)
-			  Padding(
-				padding: const EdgeInsets.symmetric(vertical: 24),
-				child: _LoginHint(
-				  onLogin: () async {
-					await Navigator.push<void>(
-					  context,
-					  MaterialPageRoute(
-						builder: (_) => const SettingsScreen(),
-					  ),
-					);
-					_loadHistory();
-				  },
-				),
-			  )
-			else ...[
-				  _ChartCard(
-					title: 'Temperatur Aussen (BME280)',
-					height: 200,
-					child: MetricChart(
-					  points: _history,
-					  unit: ' °C',
-					  color: Colors.orange,
-					  getValue: (p) => p.temperature,
-					),
-				  ),
-				  if (_history.any((p) => p.poolTemperature != null)) ...[
-					const SizedBox(height: 16),
-					_ChartCard(
-					  title: 'Temperatur Wasser (DS18B20)',
-					  height: 200,
-					  child: MetricChart(
-						points: _history
-							.where((p) => p.poolTemperature != null)
-							.toList(),
-						unit: ' °C',
-						color: Colors.blue,
-						getValue: (p) => p.poolTemperature!,
-					  ),
-					),
-				  ],
-				  const SizedBox(height: 16),
-				  _ChartCard(
-					title: 'Luftfeuchte',
-					height: 180,
-					child: MetricChart(
-					  points: _history,
-					  unit: ' %',
-					  color: Colors.teal,
-					  getValue: (p) => p.humidity,
-					  intValues: true,
-					),
-				  ),
-				  const SizedBox(height: 16),
-				  _ChartCard(
-					title: 'Luftdruck (rel.)',
-					height: 180,
-					child: MetricChart(
-					  points: _history,
-					  unit: ' hPa',
-					  color: Colors.purple,
-					  getValue: (p) => p.relPressure,
-					  intValues: true,
-					),
-				  ),
-				  const SizedBox(height: 16),
-				  _ChartCard(
-					title: 'Batterie',
-					height: 180,
-					child: MetricChart(
-					  points: _history,
-					  unit: ' %',
-					  color: Colors.green,
-					  getValue: (p) => p.batteryPct.toDouble(),
-					  intValues: true,
-					),
-				  ),
-				],
-
-							const SizedBox(height: 24),
-
-							  // API-Endpunkt Info
-							  _DeviceInfo(device: _device),
-							]),
-						  ),
-						),
-					  ],
-					),
-				  ),
-				);
-			  }
-			}
-
-class _CurrentValues extends StatelessWidget {
-  final Measurement? measurement;
-  final bool loading;
-  final String? error;
-
-  const _CurrentValues({
-	required this.measurement,
-	required this.loading,
-	required this.error,
+  const _StatusItem({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
-	if (loading && measurement == null) {
-	  return const Center(child: CircularProgressIndicator());
-	}
-	if (error != null && measurement == null) {
-	  return Text(error!, style: const TextStyle(color: Colors.red));
-	}
-	if (measurement == null) return const Text('Keine Daten');
-
-	final m = measurement!;
-	return Card(
-	  child: Padding(
-		padding: const EdgeInsets.all(16),
-		child: Column(
-		  crossAxisAlignment: CrossAxisAlignment.start,
-		  children: [
-			Row(
-			  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-			  children: [
-				Text('Aktuelle Messung',
-					style: Theme.of(context).textTheme.titleSmall),
-				Text(
-				  'Stand: ${m.timeShort} Uhr',
-				  style: const TextStyle(fontSize: 12, color: Colors.grey),
-				),
-			  ],
-			),
-			const SizedBox(height: 12),
-			_row('Außen (BME280)', m.temperature),
-			if (m.poolTemperature != null)
-			  _row('Wasser (DS18B20)', m.poolTemperature!),
-			const Divider(height: 20),
-			_infoRow(Icons.opacity,
-				'Luftfeuchte', '${m.humidity.toStringAsFixed(1)} %'),
-			const SizedBox(height: 6),
-			_infoRow(Icons.compress,
-				'Rel. Luftdruck', '${m.relPressure.toStringAsFixed(0)} hPa  •  ${m.pressureState}'),
-			const SizedBox(height: 6),
-			_infoRow(Icons.trending_flat,
-				'Drucktrend', m.trend),
-			const SizedBox(height: 6),
-			_infoRow(Icons.wb_sunny_outlined,
-				'Vorhersage', m.zambretti),
-			const Divider(height: 20),
-			_infoRow(Icons.battery_std,
-				'Akku', '${m.batteryPct} %  •  ${m.batteryVolt.toStringAsFixed(2)} V'),
-			const SizedBox(height: 6),
-			_infoRow(_wifiIcon(m.wifiStrength),
-				'WLAN', _wifiLabel(m.wifiStrength)),
-		  ],
-		),
-	  ),
-	);
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 24),
+        const SizedBox(height: 8),
+        Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+      ],
+    );
   }
+}
 
-  Widget _row(String label, double value) => Padding(
-		padding: const EdgeInsets.symmetric(vertical: 4),
-		child: Row(
-		  children: [
-			Text(label, style: const TextStyle(color: Colors.grey)),
-			const Spacer(),
-			Text(
-			  '${value.toStringAsFixed(1)} °C',
-			  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-			),
-		  ],
-		),
-	  );
+class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final bool isWeather;
+  final bool isTrend;
 
-  Widget _infoRow(IconData icon, String label, String value) => Row(
-		children: [
-		  Icon(icon, size: 14, color: Colors.grey),
-		  const SizedBox(width: 6),
-		  Text('$label: ', style: const TextStyle(fontSize: 13, color: Colors.grey)),
-		  Expanded(
-			child: Text(value, style: const TextStyle(fontSize: 13)),
-		  ),
-		],
-	  );
+  const _InfoRow({
+    required this.label, 
+    required this.value, 
+    required this.icon,
+    this.isWeather = false,
+    this.isTrend = false,
+  });
 
-  /// dBm → lesbare Qualitätsstufe
-  static String _wifiLabel(int dbm) {
-	if (dbm >= -50) return 'Ausgezeichnet';
-	if (dbm >= -60) return 'Gut';
-	if (dbm >= -70) return 'Mittel';
-	if (dbm >= -80) return 'Schwach';
-	return 'Sehr schwach';
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(icon, size: 16, color: Colors.grey),
+          ),
+          const SizedBox(width: 12),
+          Text(label, style: const TextStyle(color: Colors.grey)),
+          const SizedBox(width: 16),
+          Expanded(
+            child: isWeather
+                ? _WeatherIconRow(zambretti: value)
+                : isTrend
+                    ? Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              value,
+                              textAlign: TextAlign.right,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            WeatherUtils.trendIcon(value),
+                            color: WeatherUtils.trendColor(value),
+                            size: 22, // Etwas größer
+                          ),
+                        ],
+                      )
+                    : Text(
+                        value,
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+          ),
+        ],
+      ),
+    );
   }
+}
 
-  static IconData _wifiIcon(int dbm) {
-	if (dbm >= -60) return Icons.wifi;
-	if (dbm >= -70) return Icons.wifi_2_bar;
-	return Icons.wifi_1_bar;
+class _WeatherIconRow extends StatelessWidget {
+  final String zambretti;
+  const _WeatherIconRow({required this.zambretti});
+
+  @override
+  Widget build(BuildContext context) {
+    final icons = WeatherUtils.iconsForZambretti(zambretti);
+    final theme = Theme.of(context);
+
+    return Wrap(
+      alignment: WrapAlignment.end,
+      spacing: 8,
+      children: [
+        ...icons.map((iconData) => Icon(
+          iconData, 
+          color: WeatherUtils.colorForIcon(iconData), 
+          size: 24,
+        )),
+        if (icons.isEmpty)
+          Text(zambretti, textAlign: TextAlign.right),
+      ],
+    );
+  }
+}
+
+class _ChartContainer extends StatelessWidget {
+  final String title;
+  final double height;
+  final Widget child;
+
+  const _ChartContainer({
+    required this.title,
+    required this.height,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(height: height, child: child),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -460,46 +545,20 @@ class _PeriodSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-	const options = [6, 12, 24, 48, 168]; // in Stunden
-	const labels = ['6h', '12h', '24h', '2d', '7d'];
-
-	return SegmentedButton<int>(
-	  segments: [
-		for (var i = 0; i < options.length; i++)
-		  ButtonSegment(value: options[i], label: Text(labels[i])),
-	  ],
-	  selected: {selected},
-	  onSelectionChanged: (s) => onChanged(s.first),
-	);
-  }
-}
-
-class _ChartCard extends StatelessWidget {
-  final String title;
-  final double height;
-  final Widget child;
-
-  const _ChartCard({
-	required this.title,
-	required this.height,
-	required this.child,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-	return Card(
-	  child: Padding(
-		padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-		child: Column(
-		  crossAxisAlignment: CrossAxisAlignment.start,
-		  children: [
-			Text(title, style: Theme.of(context).textTheme.titleSmall),
-			const SizedBox(height: 8),
-			SizedBox(height: height, child: child),
-		  ],
-		),
-	  ),
-	);
+    final options = {6: '6h', 24: '24h', 168: '7d'};
+    return Row(
+      children: options.entries.map((e) {
+        final isSelected = selected == e.key;
+        return Padding(
+          padding: const EdgeInsets.only(left: 8.0),
+          child: ChoiceChip(
+            label: Text(e.value),
+            selected: isSelected,
+            onSelected: (_) => onChanged(e.key),
+          ),
+        );
+      }).toList(),
+    );
   }
 }
 
@@ -509,16 +568,15 @@ class _DeviceInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-	return Card(
-	  child: ListTile(
-		leading: const Icon(Icons.link),
-		title: const Text('API-Endpunkt'),
-		subtitle: Text(
-		  device.apiUrl,
-		  style: const TextStyle(fontSize: 11),
-		),
-	  ),
-	);
+    return Card(
+      elevation: 0,
+      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
+      child: ListTile(
+        leading: const Icon(Icons.info_outline),
+        title: const Text('API Konfiguration'),
+        subtitle: Text(device.apiUrl, style: const TextStyle(fontSize: 10)),
+      ),
+    );
   }
 }
 
@@ -528,39 +586,28 @@ class _LoginHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-	return Card(
-	  child: Padding(
-		padding: const EdgeInsets.all(16),
-		child: Row(
-		  children: [
-			const Icon(Icons.lock_outline, color: Colors.grey),
-			const SizedBox(width: 12),
-			Expanded(
-			  child: Column(
-				crossAxisAlignment: CrossAxisAlignment.start,
-				children: [
-				  Text(
-					'Verlauf erfordert Anmeldung',
-					style: Theme.of(context).textTheme.bodyMedium,
-				  ),
-				  const SizedBox(height: 4),
-				  Text(
-					'Bitte melde dich in den Einstellungen an.',
-					style: Theme.of(context)
-						.textTheme
-						.bodySmall
-						?.copyWith(color: Colors.grey),
-				  ),
-				],
-			  ),
-			),
-			TextButton(
-			  onPressed: onLogin,
-			  child: const Text('Anmelden'),
-			),
-		  ],
-		),
-	  ),
-	);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          children: [
+            const Icon(Icons.lock_person_outlined, size: 48, color: Colors.grey),
+            const SizedBox(height: 16),
+            const Text(
+              'Historie geschützt',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Um den Verlauf zu sehen, musst du dich anmelden.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 24),
+            FilledButton(onPressed: onLogin, child: const Text('Jetzt anmelden')),
+          ],
+        ),
+      ),
+    );
   }
 }

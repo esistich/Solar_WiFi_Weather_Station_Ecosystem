@@ -13,6 +13,10 @@ class Measurement {
   final int wifiStrength;        // WLAN-Signalstärke in dBm
   final String createdAt;        // Lokalzeit-String aus API, z.B. "2024-07-01 14:23:00"
   final int dataAgeSeconds;      // Wie alt sind die Daten (API-Feld data_age_s)
+  
+  /// Zusätzliche Sensordaten (z.B. Luftqualität, CO2, PM2.5), 
+  /// die dynamisch von der API kommen können.
+  final Map<String, double> extraSensors;
 
   const Measurement({
 	required this.temperature,
@@ -28,6 +32,7 @@ class Measurement {
 	required this.wifiStrength,
 	required this.createdAt,
 	required this.dataAgeSeconds,
+    this.extraSensors = const {},
   });
 
   /// Daten gelten ab 2× Messintervall (Standard: 30 Min) als veraltet.
@@ -43,9 +48,24 @@ class Measurement {
 	final poolRaw = json['pool_temperature'] != null
 		? _toDouble(json['pool_temperature'])
 		: null;
+    
+    // Bekannte Felder sammeln, um den Rest als "Extras" zu identifizieren
+    final knownKeys = {
+      'temperature', 'pool_temperature', 'humidity', 'rel_pressure', 
+      'abs_pressure', 'pressure_state', 'zambretti', 'zambretti_text',
+      'trend', 'trend_text', 'battery_pct', 'battery_volt', 
+      'wifi_strength', 'created_at', 'data_age_s'
+    };
+
+    final extras = <String, double>{};
+    json.forEach((key, value) {
+      if (!knownKeys.contains(key) && value is num) {
+        extras[key] = value.toDouble();
+      }
+    });
+
 	return Measurement(
 	  temperature:   _toDouble(json['temperature']),
-	  // DS18B20 liefert -87 als Fehlerwert – dann kein Pool-Wert anzeigen
 	  poolTemperature: (poolRaw != null && poolRaw > -50) ? poolRaw : null,
 	  humidity:      _toDouble(json['humidity']),
 	  relPressure:   _toDouble(json['rel_pressure']),
@@ -58,6 +78,7 @@ class Measurement {
 	  wifiStrength:  (json['wifi_strength'] as num?)?.toInt() ?? 0,
 	  createdAt:     _toStr(json['created_at']) ?? '',
 	  dataAgeSeconds:(json['data_age_s']    as num?)?.toInt() ?? 0,
+      extraSensors:  extras,
 	);
   }
 
@@ -83,6 +104,7 @@ class MeasurementPoint {
   final double relPressure;
   final double humidity;
   final int batteryPct;
+  final Map<String, double> extraSensors;
 
   const MeasurementPoint({
 	required this.time,
@@ -91,6 +113,7 @@ class MeasurementPoint {
 	required this.relPressure,
 	required this.humidity,
 	required this.batteryPct,
+    this.extraSensors = const {},
   });
 
   factory MeasurementPoint.fromJson(Map<String, dynamic> json) {
@@ -98,6 +121,19 @@ class MeasurementPoint {
 	final poolRaw = json['pool_temperature'] != null
 		? Measurement._toDouble(json['pool_temperature'])
 		: null;
+        
+    final knownKeys = {
+      'temperature', 'pool_temperature', 'humidity', 'rel_pressure', 
+      'abs_pressure', 'battery_pct', 'created_at'
+    };
+
+    final extras = <String, double>{};
+    json.forEach((key, value) {
+      if (!knownKeys.contains(key) && value is num) {
+        extras[key] = value.toDouble();
+      }
+    });
+
 	return MeasurementPoint(
 	  time:           DateTime.tryParse(raw) ?? DateTime.now(),
 	  temperature:    Measurement._toDouble(json['temperature']),
@@ -105,6 +141,7 @@ class MeasurementPoint {
 	  relPressure:    Measurement._toDouble(json['rel_pressure']),
 	  humidity:       Measurement._toDouble(json['humidity']),
 	  batteryPct:     (json['battery_pct'] as num?)?.toInt() ?? 0,
+      extraSensors:   extras,
 	);
   }
 }
