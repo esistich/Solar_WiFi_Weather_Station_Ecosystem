@@ -8,7 +8,7 @@ import 'settings_screen.dart';
 
 class DetailScreen extends StatefulWidget {
   final Device device;
-  final bool isEmbedded; // Neu für Tablet-Layout
+  final bool isEmbedded;
 
   const DetailScreen({super.key, required this.device, this.isEmbedded = false});
 
@@ -78,10 +78,6 @@ class _DetailScreenState extends State<DetailScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: widget.isEmbedded ? null : AppBar(
-        title: Text(_device.name),
-        // ... (falls wir im Embedded Mode sind, brauchen wir kein AppBar)
-      ),
       body: RefreshIndicator(
         onRefresh: () async {
           provider.refreshDevice(_device.id);
@@ -203,17 +199,32 @@ class _DetailScreenState extends State<DetailScreen> {
     return Column(
       children: [
         _ChartContainer(
-          title: 'Temperaturverlauf',
-          height: 260,
-          child: HistoryChart(points: _history),
-        ),
-        const SizedBox(height: 16),
-        _ChartContainer(
-          title: 'Luftfeuchtigkeit',
+          title: 'Temperatur Aussen (°C)',
           height: 200,
           child: MetricChart(
             points: _history,
-            unit: '%',
+            color: Colors.orange,
+            getValue: (p) => p.temperature,
+          ),
+        ),
+        if (_history.any((p) => p.poolTemperature != null)) ...[
+          const SizedBox(height: 16),
+          _ChartContainer(
+            title: 'Temperatur Wasser (°C)',
+            height: 200,
+            child: MetricChart(
+              points: _history.where((p) => p.poolTemperature != null).toList(),
+              color: Colors.blue,
+              getValue: (p) => p.poolTemperature!,
+            ),
+          ),
+        ],
+        const SizedBox(height: 16),
+        _ChartContainer(
+          title: 'Luftfeuchtigkeit (%)',
+          height: 200,
+          child: MetricChart(
+            points: _history,
             color: Colors.teal,
             getValue: (p) => p.humidity,
             intValues: true,
@@ -221,34 +232,37 @@ class _DetailScreenState extends State<DetailScreen> {
         ),
         const SizedBox(height: 16),
         _ChartContainer(
-          title: 'Luftdruck',
+          title: 'Luftdruck (hPa)',
           height: 200,
           child: MetricChart(
             points: _history,
-            unit: ' hPa',
             color: Colors.indigo,
             getValue: (p) => p.relPressure,
+            intValues: true,
           ),
         ),
-        // DYNAMISCHE CHARTS FÜR EXTRAS
-        if (_history.isNotEmpty && _history.first.extraSensors.isNotEmpty) ...[
-          ..._history.first.extraSensors.keys.map((sensorKey) {
-            final info = WeatherUtils.sensorInfo(sensorKey);
-            return Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: _ChartContainer(
-                title: info.$2,
-                height: 200,
-                child: MetricChart(
-                  points: _history,
-                  unit: WeatherUtils.sensorUnit(sensorKey),
-                  color: Colors.blueGrey,
-                  getValue: (p) => p.extraSensors[sensorKey] ?? 0,
-                ),
-              ),
-            );
-          }),
-        ],
+        const SizedBox(height: 16),
+        _ChartContainer(
+          title: 'Batterie (%)',
+          height: 180,
+          child: MetricChart(
+            points: _history,
+            color: Colors.green,
+            getValue: (p) => p.batteryPct.toDouble(),
+            intValues: true,
+          ),
+        ),
+        const SizedBox(height: 16),
+        _ChartContainer(
+          title: 'WLAN-Stärke (dBm)',
+          height: 180,
+          child: MetricChart(
+            points: _history,
+            color: Colors.blueGrey,
+            getValue: (p) => p.extraSensors['wifi_strength'] ?? 0,
+            intValues: true,
+          ),
+        ),
       ],
     ).animate().fadeIn(duration: 500.ms);
   }
@@ -430,8 +444,6 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -464,7 +476,7 @@ class _InfoRow extends StatelessWidget {
                           Icon(
                             WeatherUtils.trendIcon(value),
                             color: WeatherUtils.trendColor(value),
-                            size: 22, // Etwas größer
+                            size: 22,
                           ),
                         ],
                       )

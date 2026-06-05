@@ -22,7 +22,8 @@ if (flutterVersionName == null) { flutterVersionName = '1.0' }
 
 android {
 	namespace 'net.timm_sander.sws'
-	compileSdkVersion 36 // Android 16 Support
+	compileSdkVersion 36
+    ndkVersion = "28.2.13676358"
 
 	compileOptions {
         coreLibraryDesugaringEnabled true
@@ -41,7 +42,7 @@ android {
 	defaultConfig {
 		applicationId 'net.timm_sander.sws'
 		minSdkVersion 26
-		targetSdkVersion 35 // Stabilstes Target für Android 15/16
+		targetSdkVersion 36
 		versionCode flutterVersionCode.toInteger()
 		versionName flutterVersionName
         multiDexEnabled true

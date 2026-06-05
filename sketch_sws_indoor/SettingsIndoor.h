@@ -40,7 +40,7 @@ const String IndoorVersion = "1.0.0";
 // =====================================================================
 // Sprache (Translation-Dateien aus sketch_sws wiederverwenden)
 // =====================================================================
-#include "../sketch_sws/Translations/Translation_DE.h"
+#include "Translations/Translation_DE.h"
 // #include "../sketch_sws/Translations/Translation_EN.h"
 
 #define PRESS_STORM_LOW   0
@@ -58,7 +58,7 @@ const String IndoorVersion = "1.0.0";
 // WLAN – Compile-Zeit-Fallbacks
 // =====================================================================
 #define CFG_DEFAULT_STATION_NAME  "SWS_Indoor"
-#define CFG_DEFAULT_WIFI_SSID     "YOUR_SSID"
+#define CFG_DEFAULT_WIFI_SSID     "Home1"
 #define CFG_DEFAULT_WIFI_PASS     "YOUR_PASSWORD"
 
 // =====================================================================
@@ -72,7 +72,7 @@ const String IndoorVersion = "1.0.0";
 #define CFG_DEFAULT_API_PATH      "/sws/api/v1/data"
 #define CFG_DEFAULT_API_PORT      443
 #define CFG_DEFAULT_API_USER      "NAy1b4GpuS3dEvej"
-#define CFG_DEFAULT_API_PASS      "YOUR_API_PASS"   // nicht committen!
+#define CFG_DEFAULT_API_PASS      "41GpfH#aJtIl8yZ7u0V6UWwk"   // nicht committen!
 
 // =====================================================================
 // Remote-Config

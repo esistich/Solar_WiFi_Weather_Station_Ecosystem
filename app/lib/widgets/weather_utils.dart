@@ -35,7 +35,7 @@ abstract final class WeatherUtils {
       return [Icons.battery_alert_rounded];
     }
 
-    // Fallback: Wenn gar nichts erkannt wurde (z.B. "Wetter wird gut")
+    // Fallback: Wenn gar nichts erkannt wurde
     if (icons.isEmpty) {
       if (z.contains('gut')) return [Icons.wb_sunny_rounded];
       return [Icons.thermostat_rounded];
@@ -56,7 +56,6 @@ abstract final class WeatherUtils {
   static LinearGradient gradientForZambretti(String zambretti) {
 	final z = zambretti.toLowerCase();
     
-    // Sturm / Schlecht
     if (z.contains('stürmisch') || z.contains('unruhig')) {
       return const LinearGradient(
 		colors: [Color(0xFF37474F), Color(0xFF546E7A)],
@@ -64,7 +63,6 @@ abstract final class WeatherUtils {
 	  );
     }
     
-    // Regen
     if (z.contains('regen') || z.contains('schauer') || z.contains('schauerhaft')) {
       return const LinearGradient(
 		colors: [Color(0xFF455A64), Color(0xFF78909C)],
@@ -125,7 +123,6 @@ abstract final class WeatherUtils {
 
   // ── Icon-Farben ─────────────────────────────────────────────────────────────
 
-  /// Liefert eine passende Farbe für ein Wetter-Icon.
   static Color colorForIcon(IconData icon) {
     if (icon == Icons.wb_sunny_rounded) return Colors.amber;
     if (icon == Icons.wb_cloudy_rounded) return Colors.white.withOpacity(0.9);
@@ -142,51 +139,58 @@ abstract final class WeatherUtils {
 
   // ── Drucktrend ─────────────────────────────────────────────────────────────
 
-  /// Liefert ein Icon passend zum Luftdrucktrend.
   static IconData trendIcon(String trend) {
     final t = trend.toLowerCase();
     if (t.contains('rasch steigend')) return Icons.keyboard_double_arrow_up;
     if (t.contains('langsam steigend')) return Icons.trending_up;
     if (t.contains('steigend')) return Icons.arrow_upward;
-    
     if (t.contains('rasch fallend')) return Icons.keyboard_double_arrow_down;
     if (t.contains('langsam fallend')) return Icons.trending_down;
     if (t.contains('fallend')) return Icons.arrow_downward;
-    
-    // Icon für gleichbleibend / beständig
     return Icons.trending_flat;
   }
 
-  /// Liefert eine Farbe passend zum Trend.
   static Color trendColor(String trend) {
     final t = trend.toLowerCase();
     if (t.contains('steigend')) return Colors.orange;
     if (t.contains('fallend')) return Colors.blue;
-    // Deutlichere Farbe für Gleichbleibend
     return Colors.grey.shade700;
   }
 
-  // ── Extra Sensoren ─────────────────────────────────────────────────────────
+  // ── Extra Sensoren & Übersetzung ───────────────────────────────────────────
 
-  /// Liefert Icon und Label für dynamische Sensoren.
+  /// Liefert Icon und Label basierend auf dem metric_key.
   static (IconData, String) sensorInfo(String key) {
     final k = key.toLowerCase();
+    
+    if (k == 'accuracy_pct') return (Icons.analytics_outlined, 'Prognosegenauigkeit');
+    if (k == 'dewpoint' || k == 'dewpointspread') return (Icons.water_drop_outlined, 'Taupunkt');
+    if (k == 'heat_index' || k == 'heatindex') return (Icons.hot_tub_rounded, 'Hitzeindex');
+    if (k == 'battery_volt') return (Icons.electric_bolt_rounded, 'Spannung');
+    if (k == 'wifi_strength' || k == 'wifistrength') return (Icons.wifi_rounded, 'WLAN');
+    if (k == 'abs_pressure') return (Icons.compress_rounded, 'Luftdruck (abs.)');
+    if (k == 'fw_version') return (Icons.system_update_alt_rounded, 'FW Version');
+    
+    // Dynamische Erkennung für andere Sensoren
     if (k.contains('co2')) return (Icons.co2_rounded, 'CO2');
     if (k.contains('pm2') || k.contains('aqi')) return (Icons.air_rounded, 'Feinstaub');
-    if (k.contains('voc')) return (Icons.gas_meter_rounded, 'VOC');
     if (k.contains('lux') || k.contains('hell')) return (Icons.light_mode_rounded, 'Helligkeit');
     if (k.contains('uv')) return (Icons.wb_sunny_rounded, 'UV-Index');
     
-    return (Icons.sensors_rounded, key.toUpperCase());
+    return (Icons.sensors_rounded, key.toUpperCase().replaceAll('_', ' '));
   }
 
-  /// Liefert die Einheit für dynamische Sensoren.
+  /// Liefert die Einheit für den metric_key.
   static String sensorUnit(String key) {
     final k = key.toLowerCase();
-    if (k.contains('co2')) return ' ppm';
-    if (k.contains('pm2')) return ' µg/m³';
+    
+    if (k.contains('pct') || k.contains('humidity') || k == 'battery_pct') return '%';
+    if (k.contains('temperature') || k.contains('dewpoint') || k.contains('heat')) return '°C';
+    if (k.contains('pressure')) return ' hPa';
+    if (k.contains('volt')) return ' V';
+    if (k == 'wifi_strength' || k == 'wifistrength') return ' dBm';
     if (k.contains('lux')) return ' lx';
-    if (k.contains('prozent')) return ' %';
+    if (k.contains('co2')) return ' ppm';
     
     return '';
   }
