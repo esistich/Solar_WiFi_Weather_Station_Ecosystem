@@ -54,6 +54,9 @@ dependencies:
   # Homescreen Widgets
   home_widget: ^0.9.2
 
+  # Berechtigungen für WiFi Scan
+  permission_handler: ^11.3.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

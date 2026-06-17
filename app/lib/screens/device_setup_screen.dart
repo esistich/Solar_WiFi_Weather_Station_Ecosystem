@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../models/models.dart';
 import '../services/services.dart';
 import '../widgets/weather_utils.dart';
@@ -52,7 +53,30 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
     }
   }
 
-  void _nextPage() {
+  void _nextPage() async {
+    if (_currentPage == 0) {
+      // Vor dem WiFi Scan Berechtigungen prüfen (Android Pflicht)
+      final status = await Permission.location.request();
+      if (!status.isGranted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Standort-Berechtigung wird für den WLAN-Scan benötigt.')),
+          );
+        }
+        return;
+      }
+      
+      // Hinweis auf GPS-Schalter
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tipp: GPS muss eingeschaltet sein, um Stationen zu finden.'),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    }
+
     _pageController.nextPage(
       duration: 400.ms,
       curve: Curves.easeInOutCubic,

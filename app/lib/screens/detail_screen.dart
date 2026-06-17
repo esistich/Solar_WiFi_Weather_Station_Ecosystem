@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../models/models.dart';
 import '../services/services.dart';
 import '../widgets/widgets.dart';
+import '../widgets/device_editor_sheet.dart';
 import 'settings_screen.dart';
 
 class DetailScreen extends StatefulWidget {
@@ -185,14 +186,23 @@ class _DetailScreenState extends State<DetailScreen> {
     }
 
     if (_history.isEmpty) {
-      return _LoginHint(
-        onLogin: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const SettingsScreen()),
-          );
-          _loadHistory();
-        },
+      final auth = context.read<AuthService>();
+      if (!auth.isLoggedIn) {
+        return _LoginHint(
+          onLogin: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            );
+            _loadHistory();
+          },
+        );
+      }
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32.0),
+          child: Text('Keine Daten für diesen Zeitraum vorhanden.'),
+        ),
       );
     }
 
@@ -268,63 +278,15 @@ class _DetailScreenState extends State<DetailScreen> {
   }
 
   Future<void> _showRenameDialog() async {
-    final nameCtrl = TextEditingController(text: _device.name);
-    final slugCtrl = TextEditingController(text: _device.stationSlug);
-    
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(ctx).viewInsets.bottom,
-          left: 20, right: 20, top: 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Station bearbeiten', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 20),
-            TextField(
-              controller: nameCtrl,
-              decoration: const InputDecoration(labelText: 'Anzeigename'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: slugCtrl,
-              decoration: const InputDecoration(labelText: 'Station Slug (API)'),
-            ),
-            const SizedBox(height: 24),
-            FilledButton(
-              onPressed: () async {
-                final auth = context.read<AuthService>();
-                try {
-                  final result = await _api.updateStation(
-                    _device,
-                    currentSlug: _device.stationSlug,
-                    name: nameCtrl.text,
-                    newSlug: slugCtrl.text,
-                    bearerToken: auth.currentUser?.token ?? '',
-                  );
-                  if (result.error != null) {
-                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.error!)));
-                    return;
-                  }
-                  final updated = _device.copyWith(name: nameCtrl.text, stationSlug: slugCtrl.text);
-                  await context.read<DeviceProvider>().updateDevice(updated);
-                  setState(() => _device = updated);
-                  Navigator.pop(ctx);
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-                }
-              },
-              child: const Text('Speichern'),
-            ),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DeviceEditorSheet(device: _device),
     );
+    // Nach dem Schließen des Editors das lokale Objekt aktualisieren
+    final updated = context.read<DeviceProvider>().devices.firstWhere((d) => d.id == _device.id);
+    setState(() => _device = updated);
   }
 }
 

@@ -42,7 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('SWS Companion'),
+        title: const Text('Solar Weather'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),

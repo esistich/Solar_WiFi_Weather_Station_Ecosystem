@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../models/models.dart';
 import '../services/services.dart';
 import '../widgets/weather_utils.dart';
+import '../widgets/device_editor_sheet.dart';
 import 'device_setup_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -29,29 +30,37 @@ class SettingsScreen extends StatelessWidget {
           
           Consumer<DeviceProvider>(
             builder: (context, provider, _) {
-              if (provider.devices.isEmpty) {
-                return _EmptyDevicesPlaceholder();
-              }
-              return Column(
-                children: provider.devices.map((d) => _ModernDeviceTile(device: d)).toList(),
-              );
+              if (provider.devices.isEmpty) return _EmptyDevicesPlaceholder();
+              return Column(children: provider.devices.map((d) => _ModernDeviceTile(device: d)).toList());
             },
           ),
           
           _SettingsTile(
             icon: Icons.add_circle_outline_rounded,
             title: 'Neue Station hinzufügen',
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const DeviceSetupScreen()),
-            ),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DeviceSetupScreen())),
             color: colorScheme.primary,
           ),
 
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-            child: Divider(height: 1),
+          const Padding(padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8), child: Divider(height: 1)),
+
+          _SectionTitle(title: 'Widget-Konfiguration'),
+          
+          Consumer<DeviceProvider>(
+            builder: (context, provider, _) {
+              if (provider.activeWidgetIds.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                  child: Text('Keine aktiven Widgets auf dem Homescreen gefunden.', style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic)),
+                );
+              }
+              return Column(
+                children: provider.activeWidgetIds.map((id) => _WidgetConfigCard(widgetId: id, provider: provider)).toList(),
+              );
+            },
           ),
+
+          const Padding(padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8), child: Divider(height: 1)),
 
           _SectionTitle(title: 'App & Darstellung'),
           
@@ -71,17 +80,6 @@ class SettingsScreen extends StatelessWidget {
             subtitle: 'SWS Companion v1.0.0',
             onTap: () => _showAboutDialog(context),
           ),
-          
-          const SizedBox(height: 40),
-          Center(
-            child: Opacity(
-              opacity: 0.5,
-              child: Text(
-                'Solar WiFi Weather Station Project',
-                style: theme.textTheme.labelSmall,
-              ),
-            ),
-          ),
         ],
       ).animate().fadeIn(duration: 400.ms),
     );
@@ -90,12 +88,80 @@ class SettingsScreen extends StatelessWidget {
   void _showAboutDialog(BuildContext context) {
     showAboutDialog(
       context: context,
-      applicationName: 'SWS Companion',
+      applicationName: 'Solar Weather',
       applicationVersion: '1.0.0',
       applicationIcon: const Icon(Icons.wb_sunny_rounded, size: 40, color: Colors.orange),
-      children: [
-        const Text('Eine Companion-App für das Solar WiFi Weather Station Projekt.'),
-      ],
+      children: [const Text('Eine Companion-App für das Solar WiFi Weather Station Projekt.')],
+    );
+  }
+}
+
+class _WidgetConfigCard extends StatelessWidget {
+  final int widgetId;
+  final DeviceProvider provider;
+
+  const _WidgetConfigCard({required this.widgetId, required this.provider});
+
+  @override
+  Widget build(BuildContext context) {
+    final config = provider.getConfigForWidget(widgetId);
+    final selectedDeviceId = config?['deviceId'];
+    final selectedMetrics = (config?['metrics'] as List?)?.cast<String>() ?? ['humidity'];
+    
+    // Aktuelle Station finden
+    Device? currentDevice;
+    try {
+      currentDevice = provider.devices.firstWhere((d) => d.id == selectedDeviceId);
+    } catch (_) {
+      currentDevice = provider.devices.isNotEmpty ? provider.devices.first : null;
+    }
+
+    // Verfügbare Metriken der Station (BME280 Standard + Extras + Pool)
+    final availableMetrics = ['humidity', 'rel_pressure', 'battery_pct', 'wifi_strength'];
+    final measurement = currentDevice != null ? provider.measurementFor(currentDevice.id) : null;
+    if (measurement?.poolTemperature != null) availableMetrics.add('pool_temperature');
+    if (measurement != null) availableMetrics.addAll(measurement.extraSensors.keys);
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      elevation: 0,
+      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [const Icon(Icons.widgets_outlined, size: 18), const SizedBox(width: 8), Text('Widget ID: $widgetId', style: const TextStyle(fontWeight: FontWeight.bold))]),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: currentDevice?.id,
+              decoration: const InputDecoration(labelText: 'Station wählen', border: OutlineInputBorder()),
+              items: provider.devices.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name))).toList(),
+              onChanged: (newId) => provider.setWidgetConfig(widgetId, newId!, selectedMetrics),
+            ),
+            const SizedBox(height: 16),
+            const Text('Anzuzeigende Werte:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: availableMetrics.map((key) {
+                final isSelected = selectedMetrics.contains(key);
+                final info = WeatherUtils.sensorInfo(key);
+                return FilterChip(
+                  label: Text(info.$2, style: const TextStyle(fontSize: 12)),
+                  selected: isSelected,
+                  onSelected: (val) {
+                    final newList = List<String>.from(selectedMetrics);
+                    if (val) newList.add(key); else newList.remove(key);
+                    provider.setWidgetConfig(widgetId, currentDevice!.id, newList);
+                  },
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -110,61 +176,33 @@ class _AccountHeader extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer.withOpacity(0.4),
-        borderRadius: BorderRadius.circular(24),
-      ),
+      decoration: BoxDecoration(color: theme.colorScheme.primaryContainer.withOpacity(0.4), borderRadius: BorderRadius.circular(24)),
       child: Row(
         children: [
           CircleAvatar(
             radius: 30,
             backgroundColor: theme.colorScheme.primary,
-            child: Icon(
-              isLoggedIn ? Icons.person_rounded : Icons.person_outline_rounded,
-              color: theme.colorScheme.onPrimary,
-              size: 32,
-            ),
+            child: Icon(isLoggedIn ? Icons.person_rounded : Icons.person_outline_rounded, color: theme.colorScheme.onPrimary, size: 32),
           ),
           const SizedBox(width: 20),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  isLoggedIn ? 'Willkommen zurück' : 'Nicht angemeldet',
-                  style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.primary),
-                ),
-                Text(
-                  isLoggedIn ? auth.currentUser!.email : 'Für Cloud-Features einloggen',
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                  overflow: TextOverflow.ellipsis,
-                ),
+                Text(isLoggedIn ? 'Willkommen zurück' : 'Nicht angemeldet', style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.primary)),
+                Text(isLoggedIn ? auth.currentUser!.email : 'Für Cloud-Features einloggen', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
-          if (isLoggedIn)
-            IconButton(
-              onPressed: () => auth.logout(),
-              icon: const Icon(Icons.logout_rounded),
-              tooltip: 'Abmelden',
-            )
-          else
-            FilledButton(
-              onPressed: () => _showAuthBottomSheet(context, auth),
-              child: const Text('Login'),
-            ),
+          if (isLoggedIn) IconButton(onPressed: () => auth.logout(), icon: const Icon(Icons.logout_rounded))
+          else FilledButton(onPressed: () => _showAuthBottomSheet(context, auth), child: const Text('Login')),
         ],
       ),
     );
   }
 
   void _showAuthBottomSheet(BuildContext context, AuthService auth) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => _AuthBottomSheet(auth: auth),
-    );
+    showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (ctx) => _AuthBottomSheet(auth: auth));
   }
 }
 
@@ -193,78 +231,35 @@ class _AuthBottomSheetState extends State<_AuthBottomSheet> with SingleTickerPro
   Future<void> _submit() async {
     setState(() { _loading = true; _error = null; });
     try {
-      if (_tabController.index == 0) {
-        await widget.auth.login(_emailCtrl.text.trim(), _passCtrl.text);
-      } else {
-        await widget.auth.register(_emailCtrl.text.trim(), _passCtrl.text, _inviteCtrl.text.trim());
-      }
+      if (_tabController.index == 0) await widget.auth.login(_emailCtrl.text.trim(), _passCtrl.text);
+      else await widget.auth.register(_emailCtrl.text.trim(), _passCtrl.text, _inviteCtrl.text.trim());
       if (mounted) Navigator.pop(context);
     } catch (e) {
       setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
+    } finally { if (mounted) setState(() => _loading = false); }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-      ),
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-        left: 24, right: 24, top: 12,
-      ),
+      decoration: BoxDecoration(color: theme.colorScheme.surface, borderRadius: const BorderRadius.vertical(top: Radius.circular(32))),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom + 24, left: 24, right: 24, top: 12),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Center(
-            child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
-          ),
+          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
           const SizedBox(height: 20),
-          TabBar(
-            controller: _tabController,
-            tabs: const [Tab(text: 'Anmelden'), Tab(text: 'Registrieren')],
-            dividerColor: Colors.transparent,
-            onTap: (_) => setState(() => _error = null),
-          ),
+          TabBar(controller: _tabController, tabs: const [Tab(text: 'Anmelden'), Tab(text: 'Registrieren')], dividerColor: Colors.transparent, onTap: (_) => setState(() => _error = null)),
           const SizedBox(height: 24),
-          TextField(
-            controller: _emailCtrl,
-            decoration: const InputDecoration(labelText: 'E-Mail', prefixIcon: Icon(Icons.email_outlined)),
-            keyboardType: TextInputType.emailAddress,
-          ),
+          TextField(controller: _emailCtrl, decoration: const InputDecoration(labelText: 'E-Mail', prefixIcon: Icon(Icons.email_outlined)), keyboardType: TextInputType.emailAddress),
           const SizedBox(height: 12),
-          TextField(
-            controller: _passCtrl,
-            decoration: const InputDecoration(labelText: 'Passwort', prefixIcon: Icon(Icons.lock_outline)),
-            obscureText: true,
-          ),
-          AnimatedSize(
-            duration: 300.ms,
-            child: _tabController.index == 1
-              ? Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: TextField(
-                    controller: _inviteCtrl,
-                    decoration: const InputDecoration(labelText: 'Einladungscode', prefixIcon: Icon(Icons.vpn_key_outlined)),
-                  ),
-                )
-              : const SizedBox.shrink(),
-          ),
-          if (_error != null)
-            Padding(padding: const EdgeInsets.only(top: 16), child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 13))),
+          TextField(controller: _passCtrl, decoration: const InputDecoration(labelText: 'Passwort', prefixIcon: Icon(Icons.lock_outline)), obscureText: true),
+          AnimatedSize(duration: 300.ms, child: _tabController.index == 1 ? Padding(padding: const EdgeInsets.only(top: 12), child: TextField(controller: _inviteCtrl, decoration: const InputDecoration(labelText: 'Einladungscode', prefixIcon: Icon(Icons.vpn_key_outlined)))) : const SizedBox.shrink()),
+          if (_error != null) Padding(padding: const EdgeInsets.only(top: 16), child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 13))),
           const SizedBox(height: 32),
-          FilledButton(
-            onPressed: _loading ? null : _submit,
-            child: _loading 
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : Text(_tabController.index == 0 ? 'Anmelden' : 'Konto erstellen'),
-          ),
+          FilledButton(onPressed: _loading ? null : _submit, child: _loading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text(_tabController.index == 0 ? 'Anmelden' : 'Konto erstellen')),
         ],
       ),
     );
@@ -279,14 +274,7 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-      child: Text(
-        title.toUpperCase(),
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: Theme.of(context).colorScheme.primary,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.2,
-        ),
-      ),
+      child: Text(title.toUpperCase(), style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
     );
   }
 }
@@ -298,26 +286,13 @@ class _SettingsTile extends StatelessWidget {
   final VoidCallback onTap;
   final Color? color;
 
-  const _SettingsTile({
-    required this.icon,
-    required this.title,
-    this.subtitle,
-    required this.onTap,
-    this.color,
-  });
+  const _SettingsTile({required this.icon, required this.title, this.subtitle, required this.onTap, this.color});
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-      leading: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: (color ?? Theme.of(context).colorScheme.primary).withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(icon, color: color ?? Theme.of(context).colorScheme.primary, size: 22),
-      ),
+      leading: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: (color ?? Theme.of(context).colorScheme.primary).withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: color ?? Theme.of(context).colorScheme.primary, size: 22)),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
       subtitle: subtitle != null ? Text(subtitle!, style: const TextStyle(fontSize: 12)) : null,
       trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
@@ -333,25 +308,12 @@ class _SettingsSwitchTile extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
 
-  const _SettingsSwitchTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
+  const _SettingsSwitchTile({required this.icon, required this.title, required this.subtitle, required this.value, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     return SwitchListTile(
-      secondary: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(icon, color: Theme.of(context).colorScheme.primary, size: 22),
-      ),
+      secondary: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: Theme.of(context).colorScheme.primary, size: 22)),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
       subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
       value: value,
@@ -369,16 +331,10 @@ class _ModernDeviceTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-      leading: CircleAvatar(
-        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-        child: Icon(WeatherUtils.deviceIcon(device.iconIndex), size: 20),
-      ),
+      leading: CircleAvatar(backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest, child: Icon(WeatherUtils.deviceIcon(device.iconIndex), size: 20)),
       title: Text(device.name),
       subtitle: Text(device.apiHost, style: const TextStyle(fontSize: 11)),
-      trailing: IconButton(
-        icon: const Icon(Icons.more_vert_rounded),
-        onPressed: () => _showDeviceActions(context),
-      ),
+      trailing: IconButton(icon: const Icon(Icons.more_vert_rounded), onPressed: () => _showDeviceActions(context)),
     );
   }
 
@@ -389,22 +345,8 @@ class _ModernDeviceTile extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.edit_rounded),
-              title: const Text('Bearbeiten'),
-              onTap: () {
-                Navigator.pop(ctx);
-                Navigator.push(context, MaterialPageRoute(builder: (_) => DeviceSetupScreen(device: device)));
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
-              title: const Text('Entfernen', style: TextStyle(color: Colors.red)),
-              onTap: () {
-                Navigator.pop(ctx);
-                context.read<DeviceProvider>().removeDevice(device.id);
-              },
-            ),
+            ListTile(leading: const Icon(Icons.edit_rounded), title: const Text('Bearbeiten'), onTap: () { Navigator.pop(ctx); showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (ctx) => DeviceEditorSheet(device: device)); }),
+            ListTile(leading: const Icon(Icons.delete_outline_rounded, color: Colors.red), title: const Text('Entfernen', style: TextStyle(color: Colors.red)), onTap: () { Navigator.pop(ctx); context.read<DeviceProvider>().removeDevice(device.id); }),
             const SizedBox(height: 12),
           ],
         ),
@@ -416,12 +358,6 @@ class _ModernDeviceTile extends StatelessWidget {
 class _EmptyDevicesPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
-      child: Text(
-        'Noch keine Stationen hinterlegt.',
-        style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontStyle: FontStyle.italic),
-      ),
-    );
+    return Padding(padding: const EdgeInsets.all(24.0), child: Text('Noch keine Stationen hinterlegt.', style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontStyle: FontStyle.italic)));
   }
 }

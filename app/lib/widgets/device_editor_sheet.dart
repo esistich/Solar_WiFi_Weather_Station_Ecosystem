@@ -5,7 +5,6 @@ import '../models/models.dart';
 import '../services/services.dart';
 import 'weather_utils.dart';
 
-/// Zentrales, vereinheitlichtes Bearbeitungsfenster für Stationen.
 class DeviceEditorSheet extends StatefulWidget {
   final Device device;
   const DeviceEditorSheet({super.key, required this.device});
@@ -52,30 +51,43 @@ class _DeviceEditorSheetState extends State<DeviceEditorSheet> {
     setState(() => _isSaving = true);
     HapticFeedback.mediumImpact();
 
-    final provider = context.read<DeviceProvider>();
-    final updated = widget.device.copyWith(
-      name: _nameCtrl.text.trim(),
-      stationSlug: _slugCtrl.text.trim().toLowerCase(),
-      apiHost: _hostCtrl.text.trim(),
-      apiPath: _pathCtrl.text.trim(),
-      apiUser: _userCtrl.text.trim(),
-      apiPassword: _passCtrl.text,
-      apiHttps: _https,
-      iconIndex: _iconIndex,
-    );
+    try {
+      final provider = context.read<DeviceProvider>();
+      final updated = widget.device.copyWith(
+        name: _nameCtrl.text.trim(),
+        stationSlug: _slugCtrl.text.trim().toLowerCase(),
+        apiHost: _hostCtrl.text.trim(),
+        apiPath: _pathCtrl.text.trim(),
+        apiUser: _userCtrl.text.trim(),
+        apiPassword: _passCtrl.text,
+        apiHttps: _https,
+        iconIndex: _iconIndex,
+      );
 
-    final result = await provider.updateDevice(updated);
+      final result = await provider.updateDevice(updated);
 
-    if (mounted) {
-      if (result.error != null) {
+      if (mounted) {
+        if (result.error != null) {
+          setState(() => _isSaving = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.error!), 
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Änderungen erfolgreich gespeichert.')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
         setState(() => _isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result.error!), backgroundColor: Colors.red),
-        );
-      } else {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Änderungen erfolgreich gespeichert.')),
+          SnackBar(content: Text('Fehler: $e'), backgroundColor: Colors.red),
         );
       }
     }

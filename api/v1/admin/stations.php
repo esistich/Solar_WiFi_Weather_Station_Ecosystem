@@ -18,36 +18,40 @@ $newName     = trim($body['name']     ?? '');
 $newSlug     = trim($body['new_slug'] ?? '');
 
 if (!$currentSlug || !$newName || !$newSlug) {
-	sendJson(400, ['error' => 'slug, name und new_slug erforderlich']);
+	sendJson(400, ['error' => 'Daten unvollständig (Name/Slug erforderlich)']);
 }
 
-// Slug-Format validieren: nur Kleinbuchstaben, Ziffern und Bindestriche
+// Slug-Format validieren
 if (!preg_match('/^[a-z0-9\-]+$/', $newSlug)) {
-	sendJson(422, ['error' => 'new_slug darf nur a-z, 0-9 und - enthalten']);
+	sendJson(422, ['error' => 'Slug darf nur Kleinbuchstaben, Zahlen und Bindestriche enthalten']);
 }
 
 $db = getDb();
 
-// Station anhand des aktuellen Slugs suchen
-$stmt = $db->prepare('SELECT id, slug, name FROM stations WHERE slug = ? LIMIT 1');
-$stmt->execute([$currentSlug]);
+// 1. Suche Station (bevorzugt nach Slug, Fallback nach Name falls Slug leer war)
+$stmt = $db->prepare('SELECT id, slug, name FROM stations WHERE slug = ? OR (slug = "" AND name = ?) LIMIT 1');
+$stmt->execute([$currentSlug, $newName]);
 $station = $stmt->fetch();
 
 if (!$station) {
-	sendJson(404, ['error' => "Station '$currentSlug' nicht gefunden"]);
+	sendJson(404, ['error' => "Station '$currentSlug' wurde auf dem Server nicht gefunden."]);
 }
 
-// Slug-Konflikt prüfen (nur wenn Slug geändert wird)
-if ($newSlug !== $currentSlug) {
+// 2. Slug-Konflikt prüfen
+if ($newSlug !== $station['slug']) {
 	$check = $db->prepare('SELECT id FROM stations WHERE slug = ? AND id != ? LIMIT 1');
 	$check->execute([$newSlug, $station['id']]);
 	if ($check->fetch()) {
-		sendJson(409, ['error' => "Slug '$newSlug' ist bereits vergeben"]);
+		sendJson(409, ['error' => "Der Bezeichner '$newSlug' wird bereits verwendet."]);
 	}
 }
 
-// Aktualisieren
-$db->prepare('UPDATE stations SET name = ?, slug = ? WHERE id = ?')
-   ->execute([$newName, $newSlug, $station['id']]);
+// 3. Aktualisieren
+try {
+    $db->prepare('UPDATE stations SET name = ?, slug = ? WHERE id = ?')
+       ->execute([$newName, $newSlug, $station['id']]);
 
-sendJson(200, ['station' => ['id' => $station['id'], 'slug' => $newSlug, 'name' => $newName]]);
+    sendJson(200, ['station' => ['id' => $station['id'], 'slug' => $newSlug, 'name' => $newName]]);
+} catch (Exception $e) {
+    sendJson(500, ['error' => 'Datenbankfehler beim Speichern.']);
+}
